@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yoel Professional Barber</title>
+    
+    <!-- Metadatos para WhatsApp / Redes -->
+    <meta name="description" content="Agenda tu cita con los mejores profesionales. Cortes, barba y tratamientos exclusivos.">
+    <meta property="og:title" content="Yoel Professional Barber">
+    <meta property="og:description" content="Reserva tu estilo con los mejores. Cortes, barba y tratamientos VIP. ¡Agenda online ahora!">
+    <meta property="og:image" content="https://images.unsplash.com/photo-1585747860715-2ba37e788b70?q=80&w=1200&auto=format&fit=crop">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Yoel Barber Studio">
+
+    <!-- Tailwind CSS (Diseño) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Babel (Para entender React en el navegador) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Mapa de Importaciones (Para que las librerías funcionen desde la web) -->
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.292.0",
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
+      }
+    }
+    </script>
+
+    <!-- Estilos Personalizados -->
+    <style>
+        body { background-color: #0f172a; color: white; font-family: sans-serif; }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-bounce-in { animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards; }
+        @keyframes bounceIn { 0% { transform: translate(-50%, -100%); opacity: 0; } 50% { transform: translate(-50%, 10%); opacity: 1; } 100% { transform: translate(-50%, 0); } }
+        
+        /* Checkmark Animation */
+        .checkmark__circle { stroke-dasharray: 166; stroke-dashoffset: 166; stroke-width: 2; stroke-miterlimit: 10; stroke: #22c55e; fill: none; animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards; }
+        .checkmark { width: 80px; height: 80px; border-radius: 50%; display: block; stroke-width: 3; stroke: #fff; stroke-miterlimit: 10; box-shadow: inset 0px 0px 0px #22c55e; animation: fill .4s ease-in-out .4s forwards, scale .3s ease-in-out .9s both; }
+        .checkmark__check { transform-origin: 50% 50%; stroke-dasharray: 48; stroke-dashoffset: 48; animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.8s forwards; }
+        @keyframes stroke { 100% { stroke-dashoffset: 0; } }
+        @keyframes scale { 0%, 100% { transform: none; } 50% { transform: scale3d(1.1, 1.1, 1); } }
+        @keyframes fill { 100% { box-shadow: inset 0px 0px 0px 50px #22c55e; } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useMemo } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+            Scissors, Calendar, User, Home, Bell, Clock, ChevronRight, Star, LogOut, 
+            CheckCircle, X, Phone, Trash2, RefreshCw, Shield, DollarSign, AlertCircle, 
+            Smartphone, Zap, Search, Filter 
+        } from 'lucide-react';
+
+        import { initializeApp } from "firebase/app";
+        import { 
+            getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, updateProfile 
+        } from "firebase/auth";
+        import { 
+            getFirestore, collection, addDoc, getDocs, query, deleteDoc, updateDoc, doc, onSnapshot, where 
+        } from "firebase/firestore";
+
+        // --- TU CONFIGURACIÓN DE FIREBASE REAL ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCDjmyuc0VSiHZIH_YqnMJnyDL-uktkMYw",
+            authDomain: "barberia-yoel.firebaseapp.com",
+            projectId: "barberia-yoel",
+            storageBucket: "barberia-yoel.firebasestorage.app",
+            messagingSenderId: "942416678010",
+            appId: "1:942416678010:web:84017a43b59afe1679ffc3",
+            measurementId: "G-6KJEGZC9DW"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = 'barberia-yoel'; // ID fijo para tu app
+
+        // --- DATA & CONSTANTS ---
+        const SERVICES = [
+            { id: 'corte-clasico', category: 'Corte', title: 'Corte Clásico', price: 500, duration: '45 min', description: 'Corte tradicional.', icon: <Scissors className="w-6 h-6" /> },
+            { id: 'corte-estilo', category: 'Corte', title: 'Fade / Degradado', price: 700, duration: '60 min', description: 'Degradado moderno.', icon: <Scissors className="w-6 h-6" /> },
+            { id: 'barba-express', category: 'Barba', title: 'Perfilado de Barba', price: 300, duration: '30 min', description: 'Alineación con navaja.', icon: <User className="w-6 h-6" /> },
+            { id: 'barba-completa', category: 'Barba', title: 'Ritual de Barba', price: 500, duration: '45 min', description: 'Corte y toalla caliente.', icon: <User className="w-6 h-6" /> },
+            { id: 'black-mask', category: 'Tratamiento', title: 'Black Mask', price: 400, duration: '30 min', description: 'Limpieza profunda.', icon: <Star className="w-6 h-6" /> },
+            { id: 'combo-yoel', category: 'VIP', title: 'Experiencia Yoel', price: 1500, duration: '120 min', description: 'Completo + Bebida.', icon: <Star className="w-6 h-6 text-amber-400" /> }
+        ];
+
+        const TIME_SLOTS = ["09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM", "06:00 PM", "07:00 PM"];
+        const ADMIN_EMAIL = "admin@yoel.com";
+
+        // --- UTILS ---
+        const parseTime = (timeStr, dateStr) => {
+            if (!timeStr || !dateStr) return new Date();
+            const date = new Date(dateStr);
+            const [time, modifier] = timeStr.split(' ');
+            let [hours, minutes] = time.split(':');
+            if (hours === '12') hours = '00';
+            if (modifier === 'PM') hours = parseInt(hours, 10) + 12;
+            date.setHours(hours, minutes, 0, 0);
+            return date;
+        };
+        
+        const cleanPhoneForSearch = (val) => val ? val.toString().replace(/\D/g, '') : '';
+        const normalizeText = (text) => text ? text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : '';
+        const cleanPhone = (phone) => phone ? phone.replace(/\D/g, '') : '';
+        const formatPhone = (phone) => {
+            if(!phone) return 'N/A';
+            const cleaned = ('' + phone).replace(/\D/g, '');
+            const match = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
+            return match ? `(${match[1]}) ${match[2]}-${match[3]}` : phone;
+        };
+
+        // --- COMPONENTS ---
+        
+        const SuccessModal = ({ show, onClose, appointmentDetails }) => {
+            if (!show) return null;
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/95 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700 max-w-sm w-full text-center relative overflow-hidden mx-4">
+                        <div className="w-24 h-24 mx-auto mb-6 relative">
+                            <svg className="checkmark w-24 h-24 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                                <circle className="checkmark__circle" cx="26" cy="26" r="25" fill="none" />
+                                <path className="checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8" />
+                            </svg>
+                        </div>
+                        <h2 className="text-3xl font-bold text-white mb-2">¡Listo!</h2>
+                        <p className="text-slate-400 text-sm mb-6">Cita procesada correctamente.</p>
+                        {appointmentDetails && (
+                            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 mb-6 text-left">
+                                <p className="text-amber-500 text-xs font-bold uppercase mb-1">Resumen</p>
+                                <p className="text-white font-bold text-lg">{appointmentDetails.serviceTitle}</p>
+                                <div className="flex justify-between mt-2 text-sm text-slate-400">
+                                    <span>{appointmentDetails.date}</span><span>{appointmentDetails.time}</span>
+                                </div>
+                            </div>
+                        )}
+                        <button onClick={onClose} className="w-full bg-amber-500 text-slate-900 font-bold py-4 rounded-xl active:scale-95 transition-transform">ENTENDIDO</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const AuthScreen = ({ onLogin }) => {
+            const [mode, setMode] = useState('login'); 
+            const [isGuestLookup, setIsGuestLookup] = useState(false);
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [name, setName] = useState('');
+            const [phone, setPhone] = useState('');
+            const [error, setError] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            useEffect(() => { setError(''); setName(''); setPhone(''); setEmail(''); setPassword(''); setIsGuestLookup(false); }, [mode]);
+
+            const handleAuth = async (e) => {
+                e.preventDefault(); setError(''); setLoading(true);
+                
+                if (mode === 'guest' && isGuestLookup) {
+                    const cleanedPhone = cleanPhone(phone);
+                    if (cleanedPhone.length < 10) { setError('Teléfono inválido.'); setLoading(false); return; }
+                    try {
+                        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'appointments'), where('userPhone', '==', cleanedPhone));
+                        const querySnapshot = await getDocs(q);
+                        if (!querySnapshot.empty) {
+                            const firstDoc = querySnapshot.docs[0].data();
+                            onLogin({ displayName: firstDoc.userName || 'Invitado', phone: cleanedPhone, email: '', isAdmin: false, isGuest: true });
+                        } else { setError('No encontramos citas con este número.'); }
+                    } catch { setError('Error de conexión.'); }
+                    setLoading(false); return;
+                }
+
+                setTimeout(() => {
+                    const cleanedPhone = cleanPhone(phone);
+                    if (mode === 'guest' && !isGuestLookup && (!name.trim() || cleanedPhone.length < 10)) { setError('Datos inválidos.'); setLoading(false); return; }
+                    if (mode !== 'guest' && (!email.includes('@') || password.length < 6)) { setError('Credenciales inválidas.'); setLoading(false); return; }
+                    
+                    onLogin({
+                        displayName: name || email.split('@')[0] || 'Invitado',
+                        email: mode === 'guest' ? '' : email,
+                        phone: mode === 'guest' ? cleanedPhone : '',
+                        isAdmin: email === ADMIN_EMAIL,
+                        isGuest: mode === 'guest'
+                    });
+                    setLoading(false);
+                }, 800);
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-900 flex flex-col justify-center p-6 text-slate-100">
+                    <div className="mb-6 text-center animate-fade-in">
+                        <div className="w-20 h-20 bg-amber-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-amber-500/20"><Scissors className="w-10 h-10 text-slate-900" /></div>
+                        <h1 className="text-4xl font-bold text-amber-500">YOEL</h1><p className="text-slate-400 text-sm mt-1">Barber Studio</p>
+                    </div>
+                    <div className="bg-slate-800 rounded-2xl shadow-xl border border-slate-700 overflow-hidden animate-fade-in">
+                        <div className="flex border-b border-slate-700">
+                            {['login', 'register', 'guest'].map(m => (
+                                <button key={m} onClick={() => setMode(m)} className={`flex-1 py-3 text-xs font-bold uppercase transition-colors ${mode === m ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-500'}`}>{m === 'guest' ? 'Invitado' : m}</button>
+                            ))}
+                        </div>
+                        <div className="p-8">
+                            <h2 className="text-xl font-bold mb-4 text-center">{mode === 'guest' ? (isGuestLookup ? 'Buscar Cita' : 'Agenda Rápida') : (mode === 'register' ? 'Crear Cuenta' : 'Bienvenido')}</h2>
+                            <form onSubmit={handleAuth} className="space-y-4">
+                                {(mode === 'register' || (mode === 'guest' && !isGuestLookup)) && <div className="relative"><User className="absolute left-3 top-3.5 text-slate-500" size={18} /><input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 pl-10 outline-none focus:border-amber-500" placeholder="Nombre" required /></div>}
+                                {mode === 'guest' && <div className="relative"><Smartphone className="absolute left-3 top-3.5 text-slate-500" size={18} /><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 pl-10 outline-none focus:border-amber-500" placeholder="Teléfono" required /></div>}
+                                {mode !== 'guest' && <><input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 outline-none focus:border-amber-500" placeholder="Correo" required /><input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 outline-none focus:border-amber-500" placeholder="Contraseña" required /></>}
+                                {error && <div className="text-red-400 text-xs text-center bg-red-500/10 p-2 rounded">{error}</div>}
+                                <button disabled={loading} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 font-bold py-3 rounded-lg mt-4 shadow-lg">{loading ? '...' : 'CONTINUAR'}</button>
+                            </form>
+                            {mode === 'guest' && <div className="mt-4 text-center"><button onClick={() => { setError(''); setIsGuestLookup(!isGuestLookup); }} className="text-xs text-amber-500 underline">{isGuestLookup ? 'Quiero agendar nueva' : '¿Ya tienes cita? Buscar'}</button></div>}
+                            {mode === 'login' && <div className="mt-6 text-center border-t border-slate-700 pt-4"><button onClick={() => { setEmail(ADMIN_EMAIL); setPassword('admin123'); setMode('login'); }} className="text-xs text-slate-500 hover:text-amber-500 flex items-center justify-center gap-1 mx-auto"><Shield size={12} /> Acceso Admin</button></div>}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [firebaseUser, setFirebaseUser] = useState(null);
+            const [mockUser, setMockUser] = useState(null);
+            const [view, setView] = useState('home');
+            const [permissionGranted, setPermissionGranted] = useState(false);
+            
+            const [selectedService, setSelectedService] = useState(null);
+            const [selectedDate, setSelectedDate] = useState('');
+            const [selectedTime, setSelectedTime] = useState('');
+            const [editingAppId, setEditingAppId] = useState(null);
+            const [originalAppointmentData, setOriginalAppointmentData] = useState(null);
+            
+            const [allAppointments, setAllAppointments] = useState([]);
+            const [notifications, setNotifications] = useState([]);
+            const [loadingApp, setLoadingApp] = useState(true);
+            const [toast, setToast] = useState(null);
+            const [showSuccessModal, setShowSuccessModal] = useState(false);
+            const [lastBookedApp, setLastBookedApp] = useState(null);
+            const [searchTerm, setSearchTerm] = useState('');
+
+            useEffect(() => {
+                const initAuth = async () => { if (!auth.currentUser) await signInAnonymously(auth); };
+                initAuth();
+                return onAuthStateChanged(auth, u => { setFirebaseUser(u); setLoadingApp(false); });
+            }, []);
+
+            useEffect(() => {
+                if (Notification.permission === 'granted') setPermissionGranted(true);
+                const checkApps = () => {
+                    if (!mockUser?.isAdmin) return;
+                    const now = new Date();
+                    allAppointments.forEach(app => {
+                        if (app.status === 'cancelada') return;
+                        const diff = Math.floor((parseTime(app.time, app.date) - now) / 60000);
+                        if (diff === 15) {
+                            const msg = `Cita con ${app.userName} en 15 minutos.`;
+                            setNotifications(prev => prev.some(n => n.appId === app.id) ? prev : [{ id: Date.now(), appId: app.id, title: 'Recordatorio', message: msg, read: false, time: 'Ahora' }, ...prev]);
+                            if (Notification.permission === 'granted') new Notification("Barbería Yoel", { body: msg });
+                        }
+                    });
+                };
+                const interval = setInterval(checkApps, 60000);
+                return () => clearInterval(interval);
+            }, [allAppointments, mockUser]);
+
+            const requestNotif = async () => {
+                if (!('Notification' in window)) return alert("No soportado");
+                if ((await Notification.requestPermission()) === 'granted') { setPermissionGranted(true); new Notification("Notificaciones activadas"); }
+            };
+
+            useEffect(() => {
+                if (!firebaseUser) return;
+                return onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'appointments')), snap => 
+                    setAllAppointments(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+                );
+            }, [firebaseUser]);
+
+            const takenTimes = useMemo(() => selectedDate ? allAppointments.filter(a => a.date === selectedDate && a.status !== 'cancelada' && a.id !== editingAppId).map(a => a.time) : [], [selectedDate, allAppointments, editingAppId]);
+            const isDayFull = takenTimes.length >= TIME_SLOTS.length;
+
+            const clientAppointments = useMemo(() => (!firebaseUser || !mockUser) ? [] : allAppointments.filter(a => mockUser.isGuest ? a.userPhone === mockUser.phone : a.userId === firebaseUser.uid).sort((a, b) => parseTime(a.time, a.date) - parseTime(b.time, b.date)), [allAppointments, firebaseUser, mockUser]);
+
+            const adminSortedAppointments = useMemo(() => {
+                let apps = [...allAppointments];
+                if (searchTerm.trim()) {
+                    const cleanS = cleanPhoneForSearch(searchTerm);
+                    const textS = normalizeText(searchTerm);
+                    apps = apps.filter(a => (cleanS && cleanPhoneForSearch(a.userPhone).includes(cleanS)) || normalizeText(a.userName).includes(textS) || normalizeText(a.userEmail).includes(textS));
+                }
+                return apps.sort((a, b) => parseTime(a.time, a.date) - parseTime(b.time, b.date));
+            }, [allAppointments, searchTerm]);
+
+            const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+
+            const handleBook = async () => {
+                if (!selectedDate || !selectedTime || !selectedService) return;
+                try {
+                    let user = { uid: firebaseUser.uid, name: mockUser.displayName, email: mockUser.email, phone: mockUser.phone, isGuest: !!mockUser.isGuest };
+                    if (mockUser.isAdmin && originalAppointmentData) user = { uid: originalAppointmentData.userId, name: originalAppointmentData.userName, email: originalAppointmentData.userEmail, phone: originalAppointmentData.userPhone, isGuest: originalAppointmentData.isGuestBooking };
+                    
+                    const data = { 
+                        serviceId: selectedService.id, serviceTitle: selectedService.title, price: selectedService.price,
+                        date: selectedDate, time: selectedTime, updatedAt: new Date().toISOString(), status: 'confirmada',
+                        userId: user.uid, userName: user.name, userEmail: user.email, userPhone: cleanPhone(user.phone), isGuestBooking: user.isGuest 
+                    };
+
+                    if (editingAppId) {
+                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', editingAppId), data);
+                        showToast('Cita actualizada'); setView(mockUser.isAdmin ? 'admin' : 'appointments');
+                    } else {
+                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'appointments'), { ...data, createdAt: new Date().toISOString() });
+                        setLastBookedApp(data); setShowSuccessModal(true);
+                    }
+                    setEditingAppId(null); setOriginalAppointmentData(null); setSelectedService(null); setSelectedDate(''); setSelectedTime('');
+                } catch { showToast("Error al procesar", 'error'); }
+            };
+
+            const handleCancel = async (e, id) => {
+                e.stopPropagation(); if(!confirm("¿Cancelar cita?")) return;
+                try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', id)); showToast('Cita eliminada'); } catch { showToast('Error', 'error'); }
+            };
+
+            const handleStartReschedule = (app) => {
+                setEditingAppId(app.id); setOriginalAppointmentData(app);
+                const s = SERVICES.find(s => s.id === app.serviceId) || SERVICES[0];
+                setSelectedService(s); setSelectedDate(app.date); setSelectedTime(app.time);
+                setView('book');
+            };
+
+            if (loadingApp) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-amber-500 font-bold">CARGANDO...</div>;
+            if (!mockUser) return <AuthScreen onLogin={u => { setMockUser(u); setView(u.isAdmin ? 'admin' : 'home'); }} />;
+
+            // --- RENDERERS ---
+            const renderAdmin = () => {
+                const filteredCount = adminSortedAppointments.length;
+                return (
+                    <div className="pb-24 px-4 pt-20 animate-fade-in">
+                        <div className="flex justify-between items-center mb-6">
+                            <div><h2 className="text-2xl font-bold">Panel Admin</h2><p className="text-xs text-slate-400">Bienvenido, Yoel</p></div>
+                            <div className="flex gap-2">
+                                {!permissionGranted && <button onClick={requestNotif} className="p-2 bg-slate-800 rounded-full border border-slate-700"><Zap size={20} /></button>}
+                                <button onClick={() => setView('notifications')} className="relative p-2 bg-slate-800 rounded-full border border-slate-700"><Bell size={20} />{notifications.filter(n => !n.read).length > 0 && <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full"></span>}</button>
+                            </div>
+                        </div>
+                        <div className="relative mb-4">
+                            <Search className="absolute left-3 top-3.5 text-slate-500" size={18} />
+                            <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 outline-none focus:border-amber-500" placeholder="Buscar..." />
+                            {searchTerm && <button onClick={() => setSearchTerm('')} className="absolute right-3 top-3.5 text-slate-500"><X size={18} /></button>}
+                        </div>
+                        {searchTerm && <div className="flex justify-between items-center mb-6 text-xs text-slate-400 bg-slate-800/50 p-2 rounded-lg border border-slate-700"><span>Mostrando {filteredCount} citas</span><button onClick={() => setSearchTerm('')} className="text-amber-500 underline">Ver todas</button></div>}
+                        <div className="grid grid-cols-2 gap-4 mb-8">
+                            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><Calendar size={16} /><span className="text-xs font-bold">Citas</span></div><p className="text-2xl font-bold">{filteredCount}</p></div>
+                            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><DollarSign size={16} /><span className="text-xs font-bold">Ingresos</span></div><p className="text-2xl text-amber-500 font-bold">RD$ {adminSortedAppointments.reduce((a,c) => a + c.price, 0).toLocaleString()}</p></div>
+                        </div>
+                        <h3 className="font-bold mb-4 flex items-center gap-2"><Clock size={18} className="text-amber-500"/> Agenda {searchTerm && '(Filtro)'}</h3>
+                        <div className="space-y-3">
+                            {adminSortedAppointments.map(app => (
+                                <div key={app.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 relative group">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <h4 className="font-bold">{app.userName} {app.isGuestBooking && <span className="text-[10px] bg-slate-700 px-1 rounded text-slate-300">INVITADO</span>}</h4>
+                                            <p className="text-slate-400 text-xs font-mono mt-1"><Phone size={10} className="inline" /> {formatPhone(app.userPhone)}</p>
+                                            <div className="mt-2 text-amber-500 text-sm font-medium">{app.serviceTitle}</div>
+                                        </div>
+                                        <div className="text-right"><p className="font-bold text-lg">{app.time}</p><p className="text-slate-500 text-xs">{app.date}</p></div>
+                                    </div>
+                                    <div className="mt-4 pt-3 border-t border-slate-700/50 flex justify-end gap-3">
+                                        <button onClick={() => handleStartReschedule(app)} className="px-3 py-1.5 bg-blue-500/10 text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1"><RefreshCw size={12} /> REAGENDAR</button>
+                                        <button onClick={e => handleCancel(e, app.id)} className="px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold flex items-center gap-1"><Trash2 size={12} /> CANCELAR</button>
+                                    </div>
+                                </div>
+                            ))}
+                            {adminSortedAppointments.length === 0 && <div className="text-center py-12 opacity-60"><Filter className="w-12 h-12 mx-auto mb-2"/><p className="text-sm italic">No hay citas.</p></div>}
+                        </div>
+                    </div>
+                );
+            };
+
+            const renderHome = () => (
+                <div className="pb-24 animate-fade-in">
+                    <div className="relative h-72 bg-slate-800 overflow-hidden rounded-b-[40px] shadow-2xl mb-6">
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-slate-900/50 z-10"></div>
+                        <div className="absolute inset-0 opacity-10 flex items-center justify-center scale-150 rotate-12"><Scissors size={200} /></div>
+                        <div className="absolute bottom-8 left-6 z-20">
+                            <h2 className="text-amber-500 font-bold text-xs tracking-widest uppercase mb-2">Barber Studio</h2>
+                            <h1 className="text-4xl font-extrabold">ESTILO<br/>QUE DEFINE.</h1>
+                            {mockUser?.isGuest && <div className="mt-2 inline-block bg-amber-500/20 text-amber-500 px-3 py-1 rounded-full text-xs font-bold border border-amber-500/50">MODO INVITADO</div>}
+                        </div>
+                    </div>
+                    <div className="px-6">
+                        <div className="flex gap-4 mb-8">
+                            <button onClick={() => setView('book')} className="flex-1 bg-amber-500 py-4 rounded-2xl shadow-lg flex flex-col items-center gap-1 active:scale-95 transition-transform"><Calendar className="text-slate-900" size={28} /><span className="text-slate-900 font-bold text-sm">RESERVAR</span></button>
+                            <button onClick={() => setView('appointments')} className="flex-1 bg-slate-800 py-4 rounded-2xl border border-slate-700 flex flex-col items-center gap-1 active:scale-95 transition-transform"><Clock className="text-white" size={28} /><span className="text-white font-bold text-sm">MIS CITAS</span></button>
+                        </div>
+                        <h3 className="font-bold text-lg mb-4">Nuestros Servicios</h3>
+                        <div className="space-y-3">
+                            {SERVICES.slice(0, 3).map(s => (
+                                <div key={s.id} className="bg-slate-800 p-4 rounded-xl flex items-center gap-4 border border-slate-700">
+                                    <div className="bg-slate-700/50 p-3 rounded-xl text-amber-500">{s.icon}</div>
+                                    <div className="flex-1"><h4 className="font-bold">{s.title}</h4><p className="text-slate-400 text-xs">RD$ {s.price}</p></div>
+                                    <button onClick={() => { setSelectedService(s); setView('book'); }} className="bg-slate-700 text-white p-2 rounded-lg hover:bg-amber-500 hover:text-slate-900"><ChevronRight size={20} /></button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+
+            const renderBooking = () => (
+                <div className="pb-24 px-6 pt-20 animate-fade-in">
+                    <div className="flex items-center justify-between mb-6">
+                        <div><h2 className="text-2xl font-bold">{editingAppId ? 'Modificar' : 'Nueva Reserva'}</h2>{mockUser.isAdmin && originalAppointmentData && <p className="text-amber-500 text-xs font-bold">Cliente: {originalAppointmentData.userName}</p>}</div>
+                        {editingAppId && <button onClick={() => { setEditingAppId(null); setOriginalAppointmentData(null); setSelectedService(null); }} className="text-xs text-red-400 underline">Cancelar</button>}
+                    </div>
+                    {!selectedService ? <div className="space-y-4">{SERVICES.map(s => <div key={s.id} onClick={() => setSelectedService(s)} className="bg-slate-800 active:bg-slate-700 p-5 rounded-2xl border border-slate-700 flex items-center gap-4"><div className="bg-slate-900 p-3 rounded-xl text-amber-500">{s.icon}</div><div><h3 className="font-bold text-lg">{s.title}</h3><p className="text-amber-500 font-bold">RD$ {s.price}</p></div></div>)}</div> : 
+                    <div className="animate-fade-in">
+                        <div className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 mb-8 flex justify-between"><div><p className="text-xs text-slate-400">Servicio</p><h3 className="font-bold">{selectedService.title}</h3></div><button onClick={() => setSelectedService(null)}><RefreshCw size={14}/></button></div>
+                        <label className="block text-sm font-bold mb-3 ml-1">FECHA</label><input type="date" min={new Date().toISOString().split('T')[0]} value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 mb-4 outline-none focus:border-amber-500" />
+                        {selectedDate && (isDayFull ? <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl flex gap-3 text-red-400 mb-8"><AlertCircle /> <p>Día Completo</p></div> : <><label className="block text-sm font-bold mb-3 ml-1">HORA</label><div className="grid grid-cols-3 gap-3 mb-10">{TIME_SLOTS.map(t => <button key={t} disabled={takenTimes.includes(t)} onClick={() => setSelectedTime(t)} className={`py-3 px-2 rounded-xl text-xs font-bold border ${takenTimes.includes(t) ? 'bg-slate-800/50 text-slate-600 cursor-not-allowed' : selectedTime === t ? 'bg-amber-500 text-slate-900 border-amber-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{t}</button>)}</div></>)}
+                        <button disabled={!selectedDate || !selectedTime || isDayFull} onClick={handleBook} className="w-full py-4 rounded-xl font-bold text-lg bg-green-500 text-white disabled:bg-slate-800 disabled:text-slate-600">CONFIRMAR</button>
+                    </div>}
+                </div>
+            );
+
+            const renderAppointments = () => (
+                <div className="pb-24 px-6 pt-20 animate-fade-in">
+                    <h2 className="text-2xl font-bold mb-6">{view === 'notifications' ? 'Notificaciones' : 'Mis Reservas'}</h2>
+                    {view === 'notifications' && notifications.map(n => <div key={n.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-blue-500 flex gap-3 mb-3"><Bell className="text-blue-500"/><div><h4 className="font-bold text-sm">{n.title}</h4><p className="text-xs text-slate-400">{n.message}</p></div></div>)}
+                    {view === 'appointments' && (clientAppointments.length === 0 ? <div className="text-center py-20 opacity-60"><Calendar className="w-16 h-16 mx-auto mb-4"/><p>No tienes citas.</p><button onClick={() => setView('book')} className="mt-4 text-amber-500 underline">Agendar</button></div> : 
+                    <div className="space-y-4">{clientAppointments.map(app => <div key={app.id} className="bg-slate-800 rounded-2xl p-5 border border-slate-700"><div className="flex justify-between mb-2"><h3 className="font-bold">{app.serviceTitle}</h3><span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs font-bold">{app.status}</span></div><p className="text-amber-500 font-bold mb-2">RD$ {app.price}</p><div className="flex gap-4 text-sm text-slate-400 mb-4"><span>{app.date}</span><span>{app.time}</span></div><div className="flex gap-2"><button onClick={e => handleCancel(e, app.id)} className="flex-1 py-2 bg-slate-900 rounded-lg text-red-400 text-xs font-bold">CANCELAR</button><button onClick={() => handleStartReschedule(app)} className="flex-1 py-2 bg-amber-500 rounded-lg text-slate-900 text-xs font-bold">REAGENDAR</button></div></div>)}</div>)}
+                </div>
+            );
+
+            const renderProfile = () => (
+                <div className="pb-24 px-6 pt-20 animate-fade-in">
+                    <div className="bg-slate-800 rounded-2xl p-6 text-center border border-slate-700 mb-6">
+                        <div className="w-24 h-24 bg-slate-900 rounded-full mx-auto mb-4 flex items-center justify-center border-2 border-amber-500"><User className="w-10 h-10 text-amber-500" /></div>
+                        <h2 className="text-2xl font-bold">{mockUser?.displayName}</h2>
+                        <p className="text-slate-500 text-sm">{mockUser?.email || mockUser?.phone}</p>
+                        {mockUser?.isGuest && <span className="inline-block mt-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">INVITADO</span>}
+                    </div>
+                    <button onClick={() => { setMockUser(null); setView('home'); setSelectedService(null); }} className="w-full border border-red-500/30 text-red-400 py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-500/10"><LogOut size={18} /> Cerrar Sesión</button>
+                </div>
+            );
+
+            const NavItem = ({ i: Icon, l, id }) => <button onClick={() => setView(id)} className={`flex flex-col items-center gap-1 transition-all ${view === id ? 'text-amber-500 -translate-y-1' : 'text-slate-500'}`}><Icon size={24} strokeWidth={view === id ? 2.5 : 2} /><span className={`text-[10px] font-bold ${view === id ? 'opacity-100' : 'opacity-0'}`}>{l}</span></button>;
+
+            const renderContent = () => {
+                if (mockUser.isAdmin) {
+                    if (view === 'book') return renderBooking();
+                    if (view === 'notifications') return renderAppointments(); // Reuse logic
+                    return renderAdmin();
+                }
+                if (view === 'book') return renderBooking();
+                if (view === 'appointments' || view === 'notifications') return renderAppointments();
+                if (view === 'profile') return renderProfile();
+                return renderHome();
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-900 font-sans selection:bg-amber-500 selection:text-slate-900 pb-safe">
+                    <header className="fixed top-0 left-0 right-0 bg-slate-900/95 backdrop-blur-xl z-40 px-6 h-16 flex justify-between items-center border-b border-slate-800/50">
+                        <div className="flex items-center gap-2"><Scissors className="text-amber-500 w-6 h-6" /><span className="text-white font-extrabold text-xl tracking-tight">YOEL</span></div>
+                        {!mockUser.isAdmin && <button onClick={() => setView('notifications')} className="relative p-2"><Bell className="text-slate-300" size={22} />{notifications.length > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-amber-500 rounded-full"></span>}</button>}
+                    </header>
+
+                    <main className="min-h-screen">{renderContent()}</main>
+
+                    <nav className="fixed bottom-0 left-0 right-0 bg-slate-800/95 backdrop-blur-lg border-t border-slate-700 pb-safe px-6 h-20 flex justify-between items-center z-50 shadow-2xl">
+                        {mockUser.isAdmin ? (
+                            <div className="w-full flex justify-around"><NavItem i={User} l="Admin" id="admin" /><button onClick={() => setMockUser(null)} className="text-red-400 flex flex-col items-center gap-1"><LogOut size={24} /><span className="text-[10px] font-bold">Salir</span></button></div>
+                        ) : (
+                            <><NavItem i={Home} l="Inicio" id="home" /><NavItem i={Calendar} l="Agendar" id="book" /><NavItem i={Clock} l="Citas" id="appointments" /><NavItem i={User} l="Perfil" id="profile" /></>
+                        )}
+                    </nav>
+                    
+                    <SuccessModal show={showSuccessModal} onClose={() => { setShowSuccessModal(false); setView('appointments'); }} appointmentDetails={lastBookedApp} />
+                    {toast && <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] animate-bounce-in px-4 w-full max-w-sm"><div className={`text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 font-medium ${toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>{toast.msg}</div></div>}
+                </div>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
