@@ -60,10 +60,10 @@
 
         /* EFECTO NEÓN PARA CITA EXPRESS */
         @keyframes neon-pulse {
-            0%, 100% { text-shadow: 0 0 2px #f59e0b; color: #fbbf24; }
-            50% { text-shadow: 0 0 10px #f59e0b, 0 0 20px #f59e0b; color: #ffffff; }
+            0%, 100% { text-shadow: 0 0 4px #f59e0b; color: #fbbf24; }
+            50% { text-shadow: 0 0 12px #f59e0b, 0 0 20px #d97706; color: #ffffff; }
         }
-        .text-neon { animation: neon-pulse 1.5s infinite ease-in-out; }
+        .text-neon { animation: neon-pulse 2s infinite ease-in-out; font-weight: 800; letter-spacing: 0.5px; }
     </style>
 </head>
 <body>
@@ -82,7 +82,7 @@
         import { 
             Scissors, Calendar, User, Home, Bell, Clock, ChevronRight, Star, LogOut, 
             CheckCircle, X, Phone, Trash2, RefreshCw, Shield, DollarSign, AlertCircle, 
-            Smartphone, Zap, Search, Filter, Download, Plus, Edit2, Settings, TrendingUp, PieChart, Info, Lock, Unlock, CalendarOff
+            Smartphone, Zap, Search, Filter, Download, Plus, Edit2, Settings, TrendingUp, PieChart, Info, Lock, Unlock, CalendarOff, FileSpreadsheet
         } from 'lucide-react';
 
         import { initializeApp } from "firebase/app";
@@ -250,7 +250,7 @@
                 <div className="min-h-screen bg-slate-900 flex flex-col justify-center p-6 text-slate-100">
                     <div className="mb-6 text-center"><div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-white/20"><Scissors className="w-10 h-10 text-black"/></div><h1 className="text-4xl font-bold text-amber-500">YOEL</h1><p className="text-slate-400 text-sm">Professional Barber</p></div>
                     <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700 shadow-xl">
-                        {/* PESTAÑAS REORDENADAS: Acceder, Cita Express, Registrarse */}
+                        {/* PESTAÑAS REORDENADAS: Acceder -> Cita Express -> Registrarse */}
                         <div className="flex border-b border-slate-700 mb-6">
                             {['login','guest','register'].map(m=>(
                                 <button 
@@ -473,6 +473,38 @@
                 return () => clearInterval(interval);
             }, [appointments, user]);
 
+            // DOWNLOAD CSV
+            const downloadCSV = () => {
+                const appsToExport = adminApps; 
+                if (!appsToExport.length) return showToast('No hay datos para exportar', 'error');
+
+                const headers = ["Fecha", "Hora", "Cliente", "Teléfono", "Servicio", "Precio", "Estado", "Tipo"];
+                const rows = appsToExport.map(a => [
+                    a.date,
+                    a.time,
+                    `"${a.userName}"`, // Quote names with commas
+                    a.userPhone,
+                    `"${a.serviceTitle}"`,
+                    a.price,
+                    a.status,
+                    a.isGuestBooking ? 'Invitado' : 'Registrado'
+                ]);
+
+                const csvContent = [
+                    headers.join(","),
+                    ...rows.map(r => r.join(","))
+                ].join("\n");
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.setAttribute("href", url);
+                link.setAttribute("download", `reporte_barberia_yoel_${new Date().toISOString().split('T')[0]}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
             const NavItem = ({i:Icon, l, id}) => <button onClick={()=>setView(id)} className={`flex flex-col items-center ${view===id ? 'text-amber-500' : 'text-slate-500'}`}><Icon size={24} strokeWidth={view===id?2.5:2}/><span className="text-[10px] font-bold">{l}</span></button>;
             
             if(loading) return <div className="h-screen bg-slate-900 flex items-center justify-center text-amber-500 font-bold">CARGANDO...</div>;
@@ -539,7 +571,12 @@
                 const serviceStats = useMemo(() => { const stats = {}; filteredApps.forEach(a => { if (!stats[a.serviceTitle]) stats[a.serviceTitle] = {count: 0, amount: 0}; stats[a.serviceTitle].count += 1; stats[a.serviceTitle].amount += a.price; }); return Object.entries(stats).sort((a,b) => b[1].amount - a[1].amount); }, [filteredApps]);
                 return (
                     <div className="pb-24 px-4 pt-20 animate-fade-in">
-                        <h2 className="text-2xl font-bold mb-6 text-white">Reportes Financieros</h2>
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold text-white">Reportes Financieros</h2>
+                            <button onClick={downloadCSV} className="bg-slate-800 text-amber-500 p-2 rounded-full border border-slate-700 hover:bg-slate-700">
+                                <FileSpreadsheet size={20}/>
+                            </button>
+                        </div>
                         <div className="flex bg-slate-800 p-1 rounded-xl mb-6 overflow-x-auto">{['today', 'week', 'month', 'custom'].map(f => (<button key={f} onClick={() => setFilter(f)} className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg whitespace-nowrap ${filter === f ? 'bg-amber-500 text-slate-900' : 'text-slate-400'}`}>{f === 'today' ? 'Hoy' : f === 'week' ? 'Semana' : f === 'month' ? 'Mes' : 'Rango'}</button>))}</div>
                         {filter === 'custom' && (<div className="flex gap-2 mb-6"><div className="flex-1"><label className="text-[10px] text-slate-400 block mb-1">Inicio</label><input type="date" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs" value={customStart} onChange={e => setCustomStart(e.target.value)} /></div><div className="flex-1"><label className="text-[10px] text-slate-400 block mb-1">Fin</label><input type="date" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs" value={customEnd} onChange={e => setCustomEnd(e.target.value)} /></div></div>)}
                         <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700 mb-8 shadow-xl"><div className="flex items-center justify-between mb-2"><span className="text-slate-400 text-sm font-medium">Ingresos Totales</span><div className="bg-green-500/10 p-2 rounded-full text-green-500"><DollarSign size={20}/></div></div><h3 className="text-3xl font-extrabold text-white mb-1">RD$ {totalRevenue.toLocaleString()}</h3><p className="text-xs text-slate-500">{filteredApps.length} citas realizadas</p></div>
