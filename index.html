@@ -42,7 +42,6 @@
     <div id="root"></div>
 
     <script>
-        // Protección para evitar el error de Service Worker en vista previa
         if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.protocol === 'http:')) {
             window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(console.error));
         }
@@ -54,7 +53,7 @@
         import { 
             Scissors, Calendar, User, Home, Bell, Clock, ChevronRight, Star, LogOut, 
             CheckCircle, X, Phone, Trash2, RefreshCw, Shield, DollarSign, AlertCircle, 
-            Smartphone, Zap, Search, Filter, Download, Plus, Edit2, Settings, TrendingUp, PieChart, Info
+            Smartphone, Zap, Search, Filter, Download, Plus, Edit2, Settings, TrendingUp, PieChart, Info, Lock, Unlock, CalendarOff
         } from 'lucide-react';
 
         import { initializeApp } from "firebase/app";
@@ -219,6 +218,7 @@
             const [view, setView] = useState('home');
             const [services, setServices] = useState([]);
             const [appointments, setAppointments] = useState([]);
+            const [blockedSlots, setBlockedSlots] = useState([]); // NEW: Blocked Slots State
             const [loading, setLoading] = useState(true);
             const [searchTerm, setSearchTerm] = useState('');
             
@@ -251,7 +251,7 @@
 
             useEffect(() => {
                 if(!user) return;
-                // Services Fetch
+                // Services
                 onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'services')), s => {
                     if(s.empty) {
                         const b = writeBatch(db);
@@ -261,9 +261,13 @@
                         setServices(s.docs.map(d=>({id:d.id, ...d.data()})));
                     }
                 });
-                // Appointments Fetch
+                // Appointments
                 onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'appointments')), s => {
                     setAppointments(s.docs.map(d=>({id:d.id, ...d.data()})));
+                });
+                // NEW: Blocked Slots Fetch
+                onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'blocked_slots')), s => {
+                    setBlockedSlots(s.docs.map(d=>({id:d.id, ...d.data()})));
                 });
             }, [user]);
 
@@ -306,9 +310,33 @@
             const handleCancel = async (e, id) => { e.stopPropagation(); if(confirm("¿Cancelar cita?")) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', id)); showToast('Eliminada'); } };
             const handleStartReschedule = (app) => { setEditId(app.id); setOrigBooking(app); setSelService(services.find(s => s.id === app.serviceId) || services[0]); setSelDate(app.date); setSelTime(app.time); setView('book'); };
 
-            // Derived Data
-            const takenTimes = useMemo(() => selDate ? appointments.filter(a => a.date === selDate && a.status !== 'cancelada' && a.id !== editId).map(a => a.time) : [], [selDate, appointments, editId]);
-            const isDayFull = takenTimes.length >= TIME_SLOTS.length;
+            // Derived Data with Block Logic
+            const takenTimes = useMemo(() => {
+                if (!selDate) return [];
+                
+                // 1. Blocked by appointments
+                const apptTimes = appointments
+                    .filter(a => a.date === selDate && a.status !== 'cancelada' && a.id !== editId)
+                    .map(a => a.time);
+                
+                // 2. Blocked by Admin (Full Day or specific hours)
+                const blocks = blockedSlots.filter(b => b.date === selDate);
+                const isFullDayBlocked = blocks.some(b => b.wholeDay);
+                const adminBlockedTimes = blocks.flatMap(b => b.times || []);
+
+                if (isFullDayBlocked) return TIME_SLOTS; // All times blocked
+
+                return [...new Set([...apptTimes, ...adminBlockedTimes])];
+            }, [selDate, appointments, editId, blockedSlots]);
+
+            // Check if day is FULL (either by appointments or admin block)
+            const isDayFull = useMemo(() => {
+                if (!selDate) return false;
+                const blocks = blockedSlots.filter(b => b.date === selDate);
+                if (blocks.some(b => b.wholeDay)) return true; // Explicitly blocked by admin
+                return takenTimes.length >= TIME_SLOTS.length; // All slots taken
+            }, [selDate, blockedSlots, takenTimes]);
+
             const clientApps = useMemo(() => (!user) ? [] : appointments.filter(a => user.isGuest ? a.userPhone === user.phone : a.userId === user.uid).sort((a,b) => parseTime(a.time, a.date) - parseTime(b.time, b.date)), [appointments, user]);
             const adminApps = useMemo(() => {
                 let res = [...appointments];
@@ -341,30 +369,109 @@
             if(loading) return <div className="h-screen bg-slate-900 flex items-center justify-center text-amber-500 font-bold">CARGANDO...</div>;
             if(!user || !user.displayName) return <AuthScreen onLogin={u => { setUser({...auth.currentUser, ...u}); setView(u.isAdmin ? 'admin' : 'home'); }} deferredPrompt={deferredPrompt} handleInstallClick={handleInstall} />;
 
-            // --- REVENUE & REPORTS COMPONENT ---
+            // --- NEW: BLOCK SCHEDULE VIEW ---
+            const BlockScheduleView = () => {
+                const [bDate, setBDate] = useState('');
+                const [bTimes, setBTimes] = useState([]);
+                const [bAllDay, setBAllDay] = useState(false);
+                
+                // Filter existing blocks to show list
+                const myBlocks = useMemo(() => {
+                    return blockedSlots.sort((a,b) => new Date(a.date) - new Date(b.date));
+                }, [blockedSlots]);
+
+                const toggleTime = (t) => {
+                    if (bTimes.includes(t)) setBTimes(bTimes.filter(x => x !== t));
+                    else setBTimes([...bTimes, t]);
+                };
+
+                const handleSaveBlock = async () => {
+                    if (!bDate) return showToast('Selecciona una fecha', 'error');
+                    if (!bAllDay && bTimes.length === 0) return showToast('Selecciona horas o día completo', 'error');
+
+                    try {
+                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'blocked_slots'), {
+                            date: bDate,
+                            times: bAllDay ? [] : bTimes,
+                            wholeDay: bAllDay,
+                            createdAt: new Date().toISOString()
+                        });
+                        showToast('Bloqueo guardado');
+                        setBDate(''); setBTimes([]); setBAllDay(false);
+                    } catch (e) { showToast('Error al guardar', 'error'); }
+                };
+
+                const handleDeleteBlock = async (id) => {
+                    if(confirm("¿Eliminar este bloqueo?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'blocked_slots', id));
+                };
+
+                return (
+                    <div className="pb-24 px-4 pt-20 animate-fade-in">
+                        <h2 className="text-2xl font-bold mb-6 text-white">Bloquear Horario</h2>
+                        
+                        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 mb-8">
+                            <label className="text-xs text-slate-400 block mb-2">Fecha a bloquear</label>
+                            <input type="date" min={new Date().toISOString().split('T')[0]} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mb-4 text-white" value={bDate} onChange={e => setBDate(e.target.value)} />
+                            
+                            <div className="flex items-center gap-3 mb-4 bg-slate-900/50 p-3 rounded-lg cursor-pointer" onClick={() => setBAllDay(!bAllDay)}>
+                                <div className={`w-5 h-5 rounded border flex items-center justify-center ${bAllDay ? 'bg-amber-500 border-amber-500' : 'border-slate-500'}`}>
+                                    {bAllDay && <CheckCircle size={14} className="text-slate-900" />}
+                                </div>
+                                <span className="text-sm text-white font-bold">Cerrar día completo</span>
+                            </div>
+
+                            {!bAllDay && (
+                                <div className="grid grid-cols-3 gap-2 mb-6">
+                                    {TIME_SLOTS.map(t => (
+                                        <button key={t} onClick={() => toggleTime(t)} className={`py-2 text-[10px] font-bold rounded-lg border ${bTimes.includes(t) ? 'bg-red-500/20 text-red-400 border-red-500' : 'bg-slate-900 text-slate-400 border-slate-700'}`}>
+                                            {t}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            <button onClick={handleSaveBlock} className="w-full bg-amber-500 text-slate-900 font-bold py-3 rounded-xl flex items-center justify-center gap-2">
+                                <Lock size={18} /> BLOQUEAR
+                            </button>
+                        </div>
+
+                        <h3 className="font-bold mb-4 text-white text-sm">Bloqueos Activos</h3>
+                        <div className="space-y-3">
+                            {myBlocks.map(b => (
+                                <div key={b.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
+                                    <div>
+                                        <div className="flex items-center gap-2 text-amber-500 font-bold">
+                                            <CalendarOff size={16} /> {b.date}
+                                        </div>
+                                        <p className="text-xs text-slate-400 mt-1">
+                                            {b.wholeDay ? 'Día Cerrado' : `${b.times.length} horas bloqueadas`}
+                                        </p>
+                                    </div>
+                                    <button onClick={() => handleDeleteBlock(b.id)} className="p-2 bg-slate-700 rounded-lg text-red-400 hover:bg-slate-600">
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
+                            ))}
+                            {myBlocks.length === 0 && <p className="text-slate-500 text-center text-xs italic">No hay bloqueos activos.</p>}
+                        </div>
+                    </div>
+                );
+            };
+
+            // --- REVENUE VIEW ---
             const RevenueView = () => {
                 const [filter, setFilter] = useState('today');
                 const [customStart, setCustomStart] = useState('');
                 const [customEnd, setCustomEnd] = useState('');
-
                 const filteredApps = useMemo(() => {
-                    const now = new Date();
-                    let start = new Date(), end = new Date();
-                    start.setHours(0,0,0,0); end.setHours(23,59,59,999);
+                    const now = new Date(); let start = new Date(), end = new Date(); start.setHours(0,0,0,0); end.setHours(23,59,59,999);
                     if (filter === 'week') { const day = now.getDay(); const diff = now.getDate() - day + (day === 0 ? -6 : 1); start = new Date(now.setDate(diff)); start.setHours(0,0,0,0); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999); } 
                     else if (filter === 'month') { start = new Date(now.getFullYear(), now.getMonth(), 1); end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59); } 
                     else if (filter === 'custom') { if(!customStart || !customEnd) return []; start = new Date(customStart); end = new Date(customEnd); end.setHours(23,59,59,999); }
-
                     return appointments.filter(a => { if (a.status === 'cancelada') return false; const d = new Date(a.date + 'T00:00:00'); return d >= start && d <= end; });
                 }, [filter, customStart, customEnd, appointments]);
-
                 const totalRevenue = filteredApps.reduce((sum, a) => sum + (a.price || 0), 0);
-                const serviceStats = useMemo(() => {
-                    const stats = {};
-                    filteredApps.forEach(a => { if (!stats[a.serviceTitle]) stats[a.serviceTitle] = {count: 0, amount: 0}; stats[a.serviceTitle].count += 1; stats[a.serviceTitle].amount += a.price; });
-                    return Object.entries(stats).sort((a,b) => b[1].amount - a[1].amount);
-                }, [filteredApps]);
-
+                const serviceStats = useMemo(() => { const stats = {}; filteredApps.forEach(a => { if (!stats[a.serviceTitle]) stats[a.serviceTitle] = {count: 0, amount: 0}; stats[a.serviceTitle].count += 1; stats[a.serviceTitle].amount += a.price; }); return Object.entries(stats).sort((a,b) => b[1].amount - a[1].amount); }, [filteredApps]);
                 return (
                     <div className="pb-24 px-4 pt-20 animate-fade-in">
                         <h2 className="text-2xl font-bold mb-6 text-white">Reportes Financieros</h2>
@@ -372,7 +479,7 @@
                         {filter === 'custom' && (<div className="flex gap-2 mb-6"><div className="flex-1"><label className="text-[10px] text-slate-400 block mb-1">Inicio</label><input type="date" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs" value={customStart} onChange={e => setCustomStart(e.target.value)} /></div><div className="flex-1"><label className="text-[10px] text-slate-400 block mb-1">Fin</label><input type="date" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs" value={customEnd} onChange={e => setCustomEnd(e.target.value)} /></div></div>)}
                         <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700 mb-8 shadow-xl"><div className="flex items-center justify-between mb-2"><span className="text-slate-400 text-sm font-medium">Ingresos Totales</span><div className="bg-green-500/10 p-2 rounded-full text-green-500"><DollarSign size={20}/></div></div><h3 className="text-3xl font-extrabold text-white mb-1">RD$ {totalRevenue.toLocaleString()}</h3><p className="text-xs text-slate-500">{filteredApps.length} citas realizadas</p></div>
                         <h3 className="font-bold mb-4 flex items-center gap-2 text-white"><PieChart size={18} className="text-amber-500"/> Desglose por Servicio</h3>
-                        <div className="space-y-3">{serviceStats.map(([name, stat]) => (<div key={name} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center"><div><h4 className="font-bold text-white text-sm">{name}</h4><p className="text-xs text-slate-400">{stat.count} citas</p></div><span className="text-amber-500 font-bold">RD$ {stat.amount.toLocaleString()}</span></div>))} {serviceStats.length === 0 && <p className="text-center text-slate-500 text-sm py-4 italic">No hay datos para este periodo.</p>}</div>
+                        <div className="space-y-3">{serviceStats.map(([name, stat]) => (<div key={name} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center"><div><h4 className="font-bold text-white text-sm">{name}</h4><p className="text-xs text-slate-400">{stat.count} citas</p></div><span className="text-amber-500 font-bold">RD$ {stat.amount.toLocaleString()}</span></div>))} {serviceStats.length === 0 && <p className="text-center text-slate-500 text-sm py-4 italic">No hay datos.</p>}</div>
                     </div>
                 );
             };
@@ -384,17 +491,13 @@
                 return (
                     <div className="pb-24 px-4 pt-20 animate-fade-in">
                         <div className="flex justify-between items-center mb-6"><div><h2 className="text-2xl font-bold">Panel Admin</h2><p className="text-xs text-slate-400">Bienvenido, Yoel</p></div><button onClick={()=>setView('notifications')} className="relative p-2 bg-slate-800 rounded-full border border-slate-700"><Bell size={20}/>{notifications.filter(n=>!n.read).length>0&&<span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full"/>}</button></div>
-                        
                         <div className="relative mb-4"><Search className="absolute left-3 top-3.5 text-slate-500" size={18}/><input className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-white outline-none focus:border-amber-500" placeholder="Buscar..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />{searchTerm && <button onClick={()=>setSearchTerm('')} className="absolute right-3 top-3.5 text-slate-500"><X size={18}/></button>}</div>
                         {searchTerm && <div className="flex justify-between items-center mb-6 text-xs text-slate-400 bg-slate-800/50 p-2 rounded-lg border border-slate-700"><span>Mostrando {filteredCount}</span><button onClick={()=>setSearchTerm('')} className="text-amber-500 underline">Ver todas</button></div>}
-                        
                         <div className="grid grid-cols-2 gap-4 mb-8">
                             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><Calendar size={16}/><span className="text-xs font-bold">Citas</span></div><p className="text-2xl font-bold">{filteredCount}</p></div>
                             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><DollarSign size={16}/><span className="text-xs font-bold">Ingresos</span></div><p className="text-2xl font-bold text-amber-500">RD$ {revenue.toLocaleString()}</p></div>
                         </div>
-                        
                         <h3 className="font-bold mb-4 flex items-center gap-2 text-white"><Clock size={18} className="text-amber-500"/> Agenda</h3>
-                        
                         <div className="space-y-3">{adminApps.map(a => (
                             <div key={a.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 relative">
                                 <div className="flex justify-between items-start">
@@ -431,8 +534,13 @@
                             {selService.description && <div className="bg-slate-900/50 p-3 rounded-lg text-xs text-slate-300 flex gap-2 border border-slate-700/50"><Info size={14} className="text-amber-500 shrink-0 mt-0.5"/> {selService.description}</div>}
                         </div>
                         <label className="block text-sm font-bold mb-2 ml-1 text-slate-300">FECHA</label><input type="date" min={new Date().toISOString().split('T')[0]} value={selDate} onChange={e=>setSelDate(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 mb-6 text-white" />
-                        {selDate && <div className="mb-8"><label className="block text-sm font-bold mb-2 ml-1 text-slate-300">HORA</label><div className="grid grid-cols-3 gap-2">{TIME_SLOTS.map(t => <button key={t} disabled={takenTimes.includes(t)} onClick={()=>setSelTime(t)} className={`py-3 rounded-lg text-xs font-bold border ${takenTimes.includes(t) ? 'bg-slate-800/50 text-slate-600 border-slate-800' : selTime === t ? 'bg-amber-500 text-slate-900 border-amber-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{t}</button>)}</div></div>}
-                        <button disabled={!selDate || !selTime} onClick={handleBook} className="w-full bg-green-500 text-white font-bold py-4 rounded-xl disabled:bg-slate-800 disabled:text-slate-600 shadow-lg">CONFIRMAR</button>
+                        {selDate && (
+                            isDayFull ? 
+                            <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl flex items-start gap-3 text-red-400 mb-8"><AlertCircle className="min-w-[20px] mt-0.5" /><div><p className="font-bold text-sm">No disponible por el local</p><p className="text-xs mt-1">Este día ha sido bloqueado por el administrador.</p></div></div> 
+                            : 
+                            <div className="mb-8"><label className="block text-sm font-bold mb-2 ml-1 text-slate-300">HORA</label><div className="grid grid-cols-3 gap-2">{TIME_SLOTS.map(t => <button key={t} disabled={takenTimes.includes(t)} onClick={()=>setSelTime(t)} className={`py-3 rounded-lg text-xs font-bold border ${takenTimes.includes(t) ? 'bg-slate-800/50 text-slate-600 border-slate-800 line-through opacity-50 cursor-not-allowed' : selTime === t ? 'bg-amber-500 text-slate-900 border-amber-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{t}</button>)}</div></div>
+                        )}
+                        <button disabled={!selDate || !selTime || isDayFull} onClick={handleBook} className="w-full bg-green-500 text-white font-bold py-4 rounded-xl disabled:bg-slate-800 disabled:text-slate-600 shadow-lg">CONFIRMAR</button>
                     </div>}
                 </div>
             );
@@ -478,6 +586,7 @@
                     if(view === 'revenue') return <RevenueView />;
                     if(view === 'book') return renderBooking();
                     if(view === 'notifications') return renderClientAppointments();
+                    if(view === 'blocks') return <BlockScheduleView />; // NEW: Block View
                     return renderAdmin();
                 }
                 if(view === 'home') return renderHome();
@@ -497,6 +606,7 @@
                                 <NavItem i={Home} l="Panel" id="admin"/>
                                 <NavItem i={Settings} l="Servicios" id="services"/>
                                 <NavItem i={TrendingUp} l="Ingresos" id="revenue"/>
+                                <NavItem i={Lock} l="Bloqueos" id="blocks"/> {/* NEW Nav Item */}
                                 <button onClick={()=>setUser(null)} className="text-red-400 flex flex-col items-center"><LogOut/><span className="text-[10px] font-bold">Salir</span></button>
                             </div>
                         ) : (
@@ -504,7 +614,7 @@
                         )}
                     </nav>
                     <ServiceModal show={showServiceModal} onClose={()=>setShowServiceModal(false)} onSave={handleSaveService} initialData={editingService} />
-                    <SuccessModal show={showSuccessModal} onClose={()=>{setShowSuccessModal(false); setView('appointments');}} appointmentDetails={lastBookedApp} />
+                    <SuccessModal show={showSuccessModal} onClose={()=>{setShowSuccessModal(false); setView('appointments');}} appointmentDetails={lastBookedApp} allAppointments={appointments} />
                     {toast && <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] animate-bounce-in px-4 w-full max-w-sm"><div className={`text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 font-medium ${toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>{toast.type === 'success' ? <CheckCircle size={24}/> : <X size={24}/>} {toast.msg}</div></div>}
                 </div>
             );
