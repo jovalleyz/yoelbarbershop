@@ -1,4 +1,4 @@
-const CACHE_NAME = 'yoel-barber-v2'; // ¡CAMBIA ESTO CUANDO HAGAS ACTUALIZACIONES! (v3, v4...)
+const CACHE_NAME = 'yoel-barber-v3'; // ¡CAMBIA ESTO CUANDO HAGAS ACTUALIZACIONES! (v3, v4...)
 
 const urlsToCache = [
   './',
