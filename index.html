@@ -36,13 +36,33 @@
         .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+        
+        /* Custom Date Input Styling */
+        input[type="date"] {
+            color-scheme: dark; 
+            position: relative;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            background: transparent;
+            bottom: 0;
+            color: transparent;
+            cursor: pointer;
+            height: auto;
+            left: 0;
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: auto;
+        }
+        /* Spin Animation for Refresh */
+        .spin-anim { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script>
-        // Protección para evitar el error de Service Worker en vista previa
         if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.protocol === 'http:')) {
             window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(console.error));
         }
@@ -247,6 +267,7 @@
             const [blockedSlots, setBlockedSlots] = useState([]); // NEW: Blocked Slots State
             const [loading, setLoading] = useState(true);
             const [searchTerm, setSearchTerm] = useState('');
+            const [refreshKey, setRefreshKey] = useState(0); // Manual Refresh State
             
             // Booking
             const [selService, setSelService] = useState(null);
@@ -265,6 +286,7 @@
             const [showSuccessModal, setShowSuccessModal] = useState(false);
             const [lastBookedApp, setLastBookedApp] = useState(null);
             const [notifications, setNotifications] = useState([]);
+            const [isSpinning, setIsSpinning] = useState(false); // For refresh button
 
             useEffect(() => {
                 const init = async () => { 
@@ -294,11 +316,9 @@
 
             // Persist session whenever user state changes
             useEffect(() => {
-                if (user && user.displayName && !user.isAnonymous) { // isAnonymous check might be tricky if we use anonymous auth for everyone. Better check custom props.
-                   // Actually we just save if we have our custom props like displayName or isAdmin
+                if (user && user.displayName && !user.isAnonymous) { 
                    if (user.isAdmin !== undefined || user.isGuest !== undefined) {
-                       const { uid, ...toSave } = user; // Save everything except uid/token stuff handled by firebase
-                       // Actually simplest is to save the custom fields we merged
+                       const { uid, ...toSave } = user; 
                        const customData = {
                            displayName: user.displayName,
                            email: user.email,
@@ -313,8 +333,9 @@
 
             useEffect(() => {
                 if(!user) return;
-                // Services
-                onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'services')), s => {
+                
+                // Clean up previous listeners
+                const unsubServices = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'services')), s => {
                     if(s.empty) {
                         const b = writeBatch(db);
                         DEFAULT_SERVICES.forEach(sv => b.set(doc(collection(db, 'artifacts', appId, 'public', 'data', 'services')), sv));
@@ -323,15 +344,28 @@
                         setServices(s.docs.map(d=>({id:d.id, ...d.data()})));
                     }
                 });
-                // Appointments
-                onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'appointments')), s => {
+
+                const unsubApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'appointments')), s => {
                     setAppointments(s.docs.map(d=>({id:d.id, ...d.data()})));
                 });
-                // NEW: Blocked Slots Fetch
-                onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'blocked_slots')), s => {
+
+                const unsubBlocks = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'blocked_slots')), s => {
                     setBlockedSlots(s.docs.map(d=>({id:d.id, ...d.data()})));
                 });
-            }, [user]);
+
+                return () => {
+                    unsubServices();
+                    unsubApps();
+                    unsubBlocks();
+                };
+            }, [user, refreshKey]); // Trigger re-fetch when refreshKey changes
+
+            const handleManualRefresh = () => {
+                setIsSpinning(true);
+                setRefreshKey(k => k + 1);
+                showToast('Actualizando agenda...');
+                setTimeout(() => setIsSpinning(false), 1000);
+            };
 
             const handleInstall = async () => {
                 if(deferredPrompt) { deferredPrompt.prompt(); if((await deferredPrompt.userChoice).outcome === 'accepted') setDeferredPrompt(null); }
@@ -371,7 +405,7 @@
 
             const handleCancel = async (e, id) => { e.stopPropagation(); if(confirm("¿Cancelar cita?")) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', id)); showToast('Eliminada'); } };
             const handleStartReschedule = (app) => { setEditId(app.id); setOrigBooking(app); setSelService(services.find(s => s.id === app.serviceId) || services[0]); setSelDate(app.date); setSelTime(app.time); setView('book'); };
-            const handleLogout = () => { localStorage.removeItem('yoel_session'); setUser(null); setView('home'); setSelService(null); }; // FIX: Logout clears storage
+            const handleLogout = () => { localStorage.removeItem('yoel_session'); setUser(null); setView('home'); setSelService(null); }; 
 
             // Derived Data with Block Logic
             const takenTimes = useMemo(() => {
@@ -450,7 +484,14 @@
                     <div className="pb-24 px-4 pt-20 animate-fade-in">
                         <h2 className="text-2xl font-bold mb-6 text-white">Bloquear Horario</h2>
                         <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 mb-8">
-                            <label className="text-xs text-slate-400 block mb-2">Fecha</label><input type="date" min={new Date().toISOString().split('T')[0]} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mb-4 text-white" value={bDate} onChange={e => setBDate(e.target.value)} />
+                            <label className="text-xs text-slate-400 block mb-2">Fecha a bloquear</label>
+                            
+                            {/* SELECTOR DE FECHA MEJORADO */}
+                            <div className="relative mb-4">
+                                <input type="date" min={new Date().toISOString().split('T')[0]} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white cursor-pointer" value={bDate} onChange={e => setBDate(e.target.value)} id="date-block-input" />
+                                <Calendar className="absolute right-4 top-3 text-amber-500 pointer-events-none" size={20} />
+                            </div>
+                            
                             <div className="flex items-center gap-3 mb-4 bg-slate-900/50 p-3 rounded-lg cursor-pointer" onClick={() => setBAllDay(!bAllDay)}><div className={`w-5 h-5 rounded border flex items-center justify-center ${bAllDay ? 'bg-amber-500 border-amber-500' : 'border-slate-500'}`}>{bAllDay && <CheckCircle size={14} className="text-slate-900" />}</div><span className="text-sm text-white font-bold">Cerrar día completo</span></div>
                             {!bAllDay && <div className="grid grid-cols-3 gap-2 mb-6">{TIME_SLOTS.map(t => <button key={t} onClick={() => toggleTime(t)} className={`py-2 text-[10px] font-bold rounded-lg border ${bTimes.includes(t) ? 'bg-red-500/20 text-red-400 border-red-500' : 'bg-slate-900 text-slate-400 border-slate-700'}`}>{t}</button>)}</div>}
                             <button onClick={handleSaveBlock} className="w-full bg-amber-500 text-slate-900 font-bold py-3 rounded-xl flex items-center justify-center gap-2"><Lock size={18} /> BLOQUEAR</button>
@@ -500,7 +541,15 @@
                             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><Calendar size={16}/><span className="text-xs font-bold">Citas</span></div><p className="text-2xl font-bold">{filteredCount}</p></div>
                             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><DollarSign size={16}/><span className="text-xs font-bold">Ingresos</span></div><p className="text-2xl font-bold text-amber-500">RD$ {revenue.toLocaleString()}</p></div>
                         </div>
-                        <h3 className="font-bold mb-4 flex items-center gap-2 text-white"><Clock size={18} className="text-amber-500"/> Agenda</h3>
+                        
+                        <h3 className="font-bold mb-4 flex items-center gap-2 text-white">
+                            <Clock size={18} className="text-amber-500"/> 
+                            Agenda
+                            <button onClick={handleManualRefresh} className={`ml-2 hover:text-amber-500 transition-colors ${isSpinning ? 'spin-anim text-amber-500' : 'text-slate-500'}`}>
+                                <RefreshCw size={16} />
+                            </button>
+                        </h3>
+                        
                         <div className="space-y-3">{adminApps.map(a => (
                             <div key={a.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 relative">
                                 <div className="flex justify-between items-start">
@@ -536,7 +585,14 @@
                             <div className="flex justify-between items-center mb-2"><div><p className="text-xs text-slate-400">Servicio</p><h3 className="font-bold">{selService.title}</h3></div><button onClick={()=>setSelService(null)}><RefreshCw size={14}/></button></div>
                             {selService.description && <div className="bg-slate-900/50 p-3 rounded-lg text-xs text-slate-300 flex gap-2 border border-slate-700/50"><Info size={14} className="text-amber-500 shrink-0 mt-0.5"/> {selService.description}</div>}
                         </div>
-                        <label className="block text-sm font-bold mb-2 ml-1 text-slate-300">FECHA</label><input type="date" min={new Date().toISOString().split('T')[0]} value={selDate} onChange={e=>setSelDate(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 mb-6 text-white" />
+                        <label className="block text-sm font-bold mb-2 ml-1 text-slate-300">FECHA</label>
+                        
+                        {/* SELECTOR DE FECHA MEJORADO (CLIENTE) */}
+                        <div className="relative mb-6">
+                            <input type="date" min={new Date().toISOString().split('T')[0]} value={selDate} onChange={e=>setSelDate(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white cursor-pointer" />
+                            <Calendar className="absolute right-4 top-4 text-amber-500 pointer-events-none" size={24} />
+                        </div>
+
                         {selDate && (
                             isDayFull ? 
                             <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl flex items-start gap-3 text-red-400 mb-8"><AlertCircle className="min-w-[20px] mt-0.5" /><div><p className="font-bold text-sm">No disponible por el local</p><p className="text-xs mt-1">Este día ha sido bloqueado por el administrador.</p></div></div> 
