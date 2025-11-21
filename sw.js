@@ -1,4 +1,4 @@
-const CACHE_NAME = 'yoel-barber-v3'; // ¡CAMBIA ESTO CUANDO HAGAS ACTUALIZACIONES! (v3, v4...)
+const CACHE_NAME = 'yoel-barber-v3'; // <--- CAMBIA ESTO A v4, v5... CUANDO ACTUALICES
 
 const urlsToCache = [
   './',
@@ -14,49 +14,37 @@ const urlsToCache = [
   'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js'
 ];
 
-// 1. Instalación: Guardamos todo en caché
 self.addEventListener('install', (event) => {
+  self.skipWaiting(); // Opcional: Fuerza la instalación rápida, aunque el botón manual es más seguro
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Cache abierta');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
   );
 });
 
-// 2. Activación: Borramos cachés viejas para liberar espacio y asegurar la nueva versión
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('Borrando caché antigua:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
     })
   );
+  self.clients.claim(); // Toma control de los clientes inmediatamente
 });
 
-// 3. Interceptación de red: Servimos desde caché, si no hay, vamos a internet
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Si está en caché, lo devolvemos
-        if (response) {
-          return response;
-        }
-        // Si no, hacemos la petición a red
-        return fetch(event.request);
-      })
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request);
+    })
   );
 });
 
-// 4. Escuchar mensaje para actualizar inmediatamente
+// Escuchar mensaje para saltar la espera si el usuario le da al botón
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
