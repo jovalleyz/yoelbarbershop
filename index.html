@@ -57,12 +57,20 @@
         /* Spin Animation for Refresh */
         .spin-anim { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        /* EFECTO NEÓN PARA CITA EXPRESS */
+        @keyframes neon-pulse {
+            0%, 100% { text-shadow: 0 0 2px #f59e0b; color: #fbbf24; }
+            50% { text-shadow: 0 0 10px #f59e0b, 0 0 20px #f59e0b; color: #ffffff; }
+        }
+        .text-neon { animation: neon-pulse 1.5s infinite ease-in-out; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script>
+        // Protección para evitar el error de Service Worker en vista previa
         if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.protocol === 'http:')) {
             window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(console.error));
         }
@@ -214,7 +222,7 @@
             const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [name, setName] = useState(''); const [phone, setPhone] = useState(''); 
             const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const [isLookup, setLookup] = useState(false);
 
-            const getTabLabel = (m) => m === 'login' ? 'Login' : m === 'register' ? 'Registrarse' : 'Invitado'; 
+            const getTabLabel = (m) => m === 'login' ? 'Acceder' : m === 'register' ? 'Registrarse' : 'Cita Express'; 
 
             const handleAuth = async (e) => {
                 e.preventDefault(); setError(''); setLoading(true);
@@ -242,7 +250,20 @@
                 <div className="min-h-screen bg-slate-900 flex flex-col justify-center p-6 text-slate-100">
                     <div className="mb-6 text-center"><div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-white/20"><Scissors className="w-10 h-10 text-black"/></div><h1 className="text-4xl font-bold text-amber-500">YOEL</h1><p className="text-slate-400 text-sm">Professional Barber</p></div>
                     <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700 shadow-xl">
-                        <div className="flex border-b border-slate-700 mb-6">{['login','register','guest'].map(m=><button key={m} onClick={()=>{setMode(m); setLookup(false);}} className={`flex-1 py-2 text-xs font-bold uppercase ${mode===m?'text-amber-500 border-b-2 border-amber-500':'text-slate-500'}`}>{getTabLabel(m)}</button>)}</div>
+                        {/* PESTAÑAS REORDENADAS: Acceder, Cita Express, Registrarse */}
+                        <div className="flex border-b border-slate-700 mb-6">
+                            {['login','guest','register'].map(m=>(
+                                <button 
+                                    key={m} 
+                                    onClick={()=>{setMode(m); setLookup(false);}} 
+                                    className={`flex-1 py-2 text-xs font-bold uppercase ${mode===m?'text-amber-500 border-b-2 border-amber-500':'text-slate-500'}`}
+                                >
+                                    <span className={m === 'guest' ? 'text-neon' : ''}>
+                                        {getTabLabel(m)}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
                         <form onSubmit={handleAuth} className="space-y-4">
                             {(mode==='register' || (mode==='guest' && !isLookup)) && <div className="relative"><User size={18} className="absolute left-3 top-3 text-slate-500"/><input className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-10 outline-none text-white focus:border-amber-500" placeholder="Nombre" value={name} onChange={e=>setName(e.target.value)}/></div>}
                             {mode==='guest' && <div className="relative"><Smartphone size={18} className="absolute left-3 top-3 text-slate-500"/><input type="tel" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-10 outline-none text-white focus:border-amber-500" placeholder="Teléfono" value={phone} onChange={e=>setPhone(e.target.value)}/></div>}
@@ -541,7 +562,6 @@
                             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><Calendar size={16}/><span className="text-xs font-bold">Citas</span></div><p className="text-2xl font-bold">{filteredCount}</p></div>
                             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><DollarSign size={16}/><span className="text-xs font-bold">Ingresos</span></div><p className="text-2xl font-bold text-amber-500">RD$ {revenue.toLocaleString()}</p></div>
                         </div>
-                        
                         <h3 className="font-bold mb-4 flex items-center gap-2 text-white">
                             <Clock size={18} className="text-amber-500"/> 
                             Agenda
@@ -549,7 +569,6 @@
                                 <RefreshCw size={16} />
                             </button>
                         </h3>
-                        
                         <div className="space-y-3">{adminApps.map(a => (
                             <div key={a.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 relative">
                                 <div className="flex justify-between items-start">
