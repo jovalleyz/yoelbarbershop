@@ -85,17 +85,7 @@
         const getIcon = (name) => { const I = ICON_MAP[name] || Scissors; return <I className="w-6 h-6"/>; };
 
         // --- UTILS ---
-        const parseTime = (t, d) => { 
-            if(!t||!d) return new Date(); 
-            try {
-                const [year, month, day] = d.split('-').map(Number);
-                const [time, modifier] = t.split(' ');
-                let [hours, minutes] = time.split(':').map(Number);
-                if (hours === 12) hours = 0;
-                if (modifier === 'PM') hours += 12;
-                return new Date(year, month - 1, day, hours, minutes, 0, 0);
-            } catch(e) { return new Date(); }
-        };
+        const parseTime = (t, d) => { if(!t||!d) return new Date(); try { const [year, month, day] = d.split('-').map(Number); const [time, modifier] = t.split(' '); let [hours, minutes] = time.split(':').map(Number); if (hours === 12) hours = 0; if (modifier === 'PM') hours += 12; return new Date(year, month - 1, day, hours, minutes, 0, 0); } catch(e) { return new Date(); } };
         const isPastTime = (t, d) => parseTime(t, d) < new Date();
         const cleanPhone = p => p ? p.replace(/\D/g, '') : '';
         const formatPhone = p => { if(!p) return 'N/A'; const c=(''+p).replace(/\D/g,''), m=c.match(/^(\d{3})(\d{3})(\d{4})$/); return m ? `(${m[1]}) ${m[2]}-${m[3]}` : p; };
@@ -217,41 +207,77 @@
             const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [name, setName] = useState(''); const [phone, setPhone] = useState(''); 
             const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const [isLookup, setLookup] = useState(false);
             const getTabLabel = (m) => m === 'login' ? 'Acceder' : m === 'register' ? 'Registrarse' : 'Cita Express'; 
+            
+            // FIX: Validation Logic
             const handleAuth = async (e) => {
                 e.preventDefault(); setError(''); setLoading(true);
+                
+                // 1. LÓGICA DE BÚSQUEDA DE INVITADO
                 if(mode === 'guest' && isLookup) {
                     const cp = cleanPhoneForSearch(phone);
-                    if(cp.length < 10) { setError('Teléfono inválido'); setLoading(false); return; }
+                    if(cp.length < 10) { setError('El teléfono debe tener 10 dígitos'); setLoading(false); return; }
                     try {
                         const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'appointments'), where('userPhone', '==', cp));
                         const sn = await getDocs(q);
                         if(!sn.empty) onLogin({displayName: sn.docs[0].data().userName||'Invitado', phone: cp, email:'', isAdmin: false, isGuest: true});
-                        else setError('No hay citas.');
-                    } catch { setError('Error de red.'); }
+                        else setError('No se encontraron citas.');
+                    } catch { setError('Error de conexión.'); }
                     setLoading(false); return;
                 }
+
+                // 2. VALIDACIONES Y LOGIN
                 setTimeout(() => {
                     const cp = cleanPhoneForSearch(phone);
-                    if(mode==='guest' && !isLookup && (!name.trim() || cp.length<10)) { setError('Datos inválidos'); setLoading(false); return; }
-                    if(mode!=='guest' && (!email.includes('@') || password.length<6)) { setError('Credenciales inválidas'); setLoading(false); return; }
-                    onLogin({displayName: name||email.split('@')[0]||'Invitado', email: mode==='guest'?'':email, phone: mode==='guest'?cp:'', isAdmin: email===ADMIN_EMAIL, isGuest: mode==='guest'});
+                    
+                    // Validación Cita Express
+                    if(mode === 'guest' && !isLookup) {
+                         if(!name.trim()) { setError('Nombre obligatorio'); setLoading(false); return; }
+                         if(cp.length < 10) { setError('Teléfono de 10 dígitos obligatorio'); setLoading(false); return; }
+                    }
+
+                    // Validación Registro
+                    if(mode === 'register') {
+                        if(!name.trim()) { setError('Nombre obligatorio'); setLoading(false); return; }
+                        if(!email.includes('@')) { setError('Correo inválido'); setLoading(false); return; }
+                        if(password.length < 6) { setError('Contraseña mín. 6 caracteres'); setLoading(false); return; }
+                    }
+
+                    // Validación Acceder
+                    if(mode === 'login') {
+                        if(!email.includes('@')) { setError('Correo inválido'); setLoading(false); return; }
+                        if(password.length < 1) { setError('Ingresa contraseña'); setLoading(false); return; }
+                    }
+                    
+                    onLogin({
+                        displayName: name||email.split('@')[0]||'Invitado', 
+                        email: mode==='guest'?'':email, 
+                        phone: mode==='guest'?cp:'', 
+                        isAdmin: (mode === 'login' && email === ADMIN_EMAIL), 
+                        isGuest: mode==='guest'
+                    });
                     setLoading(false);
                 }, 800);
             };
+
             return (
                 <div className="min-h-screen bg-slate-900 flex flex-col justify-center p-6 text-slate-100">
                     <div className="mb-6 text-center"><div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-white/20"><Scissors className="w-10 h-10 text-black"/></div><h1 className="text-4xl font-bold text-amber-500">YOEL</h1><p className="text-slate-400 text-sm">Professional Barber</p></div>
                     <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700 shadow-xl">
-                        <div className="flex border-b border-slate-700 mb-6">{['login','guest','register'].map(m=><button key={m} onClick={()=>{setMode(m); setLookup(false);}} className={`flex-1 py-2 text-xs font-bold uppercase ${mode===m?'text-amber-500 border-b-2 border-amber-500':'text-slate-500'}`}><span className={m === 'guest' ? 'text-neon' : ''}>{getTabLabel(m)}</span></button>)}</div>
+                        {/* PESTAÑAS REORDENADAS */}
+                        <div className="flex border-b border-slate-700 mb-6">
+                            {['login','guest','register'].map(m=><button key={m} onClick={()=>{setMode(m); setLookup(false); setError('');}} className={`flex-1 py-2 text-xs font-bold uppercase ${mode===m?'text-amber-500 border-b-2 border-amber-500':'text-slate-500'}`}><span className={m === 'guest' ? 'text-neon' : ''}>{getTabLabel(m)}</span></button>)}
+                        </div>
+                        
                         <form onSubmit={handleAuth} className="space-y-4">
                             {(mode==='register' || (mode==='guest' && !isLookup)) && <div className="relative"><User size={18} className="absolute left-3 top-3 text-slate-500"/><input className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-10 outline-none text-white focus:border-amber-500" placeholder="Nombre" value={name} onChange={e=>setName(e.target.value)}/></div>}
-                            {mode==='guest' && <div className="relative"><Smartphone size={18} className="absolute left-3 top-3 text-slate-500"/><input type="tel" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-10 outline-none text-white focus:border-amber-500" placeholder="Teléfono" value={phone} onChange={e=>setPhone(e.target.value)}/></div>}
+                            {mode==='guest' && <div className="relative"><Smartphone size={18} className="absolute left-3 top-3 text-slate-500"/><input type="tel" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-10 outline-none text-white focus:border-amber-500" placeholder="Teléfono (10 dígitos)" value={phone} onChange={e=>setPhone(e.target.value)}/></div>}
                             {mode!=='guest' && <><input className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-amber-500" placeholder="Correo" value={email} onChange={e=>setEmail(e.target.value)}/><input type="password" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-amber-500" placeholder="Contraseña" value={password} onChange={e=>setPassword(e.target.value)}/></>}
-                            {error && <div className="text-red-400 text-xs text-center">{error}</div>}
-                            <button disabled={loading} className="w-full bg-amber-500 text-slate-900 font-bold py-2 rounded-lg">{loading?'...':'CONTINUAR'}</button>
+                            {error && <div className="text-red-400 text-xs text-center bg-red-500/10 p-2 rounded animate-pulse">{error}</div>}
+                            <button disabled={loading} className="w-full bg-amber-500 text-slate-900 font-bold py-2 rounded-lg shadow-lg shadow-amber-500/20">{loading?'Procesando...': (mode==='guest' && isLookup ? 'BUSCAR CITA' : 'CONTINUAR')}</button>
                         </form>
-                        {mode==='guest' && <button onClick={()=>setLookup(!isLookup)} className="block w-full text-center text-xs text-amber-500 mt-4 underline">{isLookup?'Quiero agendar':'Buscar mi cita'}</button>}
-                        {mode==='login' && <div className="mt-6 pt-4 border-t border-slate-700 text-center"><button onClick={()=>{setEmail(ADMIN_EMAIL); setPassword('admin123'); setMode('login');}} className="text-xs text-slate-500 flex items-center justify-center gap-1 mx-auto hover:text-amber-500"><Shield size={12}/> Acceso</button></div>} 
+
+                        {mode==='guest' && <div className="mt-4 text-center"><button onClick={()=>{setLookup(!isLookup); setError('');}} className="text-xs text-amber-500 underline">{isLookup?'Quiero agendar nueva':'¿Ya tienes cita? Buscar'}</button></div>}
+                        {mode==='login' && <div className="mt-6 pt-4 border-t border-slate-700 text-center"><button onClick={()=>{setEmail(ADMIN_EMAIL); setPassword('admin123'); setMode('login');}} className="text-xs text-slate-500 flex items-center justify-center gap-1 mx-auto hover:text-amber-500"><Shield size={12}/> Acceso Admin (Demo)</button></div>} 
                     </div>
                     {deferredPrompt && <button onClick={handleInstallClick} className="mt-8 mx-auto flex items-center gap-2 bg-slate-800 text-amber-500 px-6 py-3 rounded-full border border-amber-500/30 shadow-lg"><Download size={20}/> <span className="font-bold text-sm">INSTALAR APP</span></button>}
                 </div>
@@ -379,6 +405,9 @@
             const renderAdminServices = () => ( <div className="pb-24 px-4 pt-20 animate-fade-in"> <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold">Servicios</h2><button onClick={()=>{setEditingService(null); setShowServiceModal(true);}} className="p-2 bg-amber-500 rounded-full text-slate-900"><Plus/></button></div> <div className="space-y-3">{services.map(s => ( <div key={s.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center"> <div className="flex gap-4 items-center"><div className="bg-slate-900 p-3 rounded-xl text-amber-500">{getIcon(s.iconName)}</div><div><h4 className="font-bold text-white">{s.title}</h4><p className="text-slate-400 text-sm">RD$ {s.price}</p></div></div> <div className="flex gap-2"><button onClick={()=>{setEditingService(s); setShowServiceModal(true);}} className="p-2 bg-slate-700 rounded-lg text-blue-400"><Edit2 size={18}/></button><button onClick={()=>handleDeleteService(s.id)} className="p-2 bg-slate-700 rounded-lg text-red-400"><Trash2 size={18}/></button></div> </div> ))}</div> </div> );
             const renderRevenue = () => <RevenueView appointments={appointments} downloadCSV={downloadCSV} />;
             const renderBlockSchedule = () => <BlockScheduleView blockedSlots={blockedSlots} onSaveBlock={handleSaveBlock} onDeleteBlock={handleDeleteBlock} />;
+            const renderClientAppointments = () => ( <div className="pb-24 px-6 pt-20 animate-fade-in"> <h2 className="text-2xl font-bold mb-6">{view === 'notifications' ? 'Notificaciones' : 'Mis Citas'}</h2> {view === 'notifications' && notifications.map(n => <div key={n.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-blue-500 flex gap-3 mb-3"><Bell className="text-blue-500"/><div><h4 className="font-bold text-sm">{n.title}</h4><p className="text-xs text-slate-400">{n.message}</p></div></div>)} {view === 'appointments' && (clientApps.length === 0 ? <div className="text-center py-20 opacity-50"><Calendar size={64} className="mx-auto mb-4"/><p>No tienes citas.</p><button onClick={()=>setView('book')} className="mt-4 text-amber-500 underline">Agendar</button></div> : <div className="space-y-4">{clientApps.map(a => <div key={a.id} className="bg-slate-800 p-5 rounded-2xl border border-slate-700"><div className="flex justify-between mb-2"><h3 className="font-bold">{a.serviceTitle}</h3><span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs font-bold">{a.status}</span></div><p className="text-amber-500 font-bold mb-2">RD$ {a.price}</p><div className="flex gap-4 text-sm text-slate-400 mb-4"><span>{a.date}</span><span>{a.time}</span></div><div className="flex gap-2"><button onClick={e=>handleCancel(e, a.id)} className="flex-1 py-2 bg-slate-900 rounded-lg text-red-400 text-xs font-bold">CANCELAR</button><button onClick={()=>handleStartReschedule(a)} className="flex-1 py-2 bg-amber-500 rounded-lg text-slate-900 text-xs font-bold">REAGENDAR</button></div></div>)}</div>)} </div> );
+            const renderProfile = () => ( <div className="pb-24 px-6 pt-20 animate-fade-in"> <div className="bg-slate-800 rounded-2xl p-6 text-center border border-slate-700 mb-6"><div className="w-24 h-24 bg-slate-900 rounded-full mx-auto mb-4 flex items-center justify-center border-2 border-amber-500"><User className="w-10 h-10 text-amber-500"/></div><h2 className="text-2xl font-bold">{user.displayName}</h2><p className="text-sm text-slate-500">{user.email||user.phone}</p>{user.isGuest && <span className="inline-block mt-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">INVITADO</span>}</div> <button onClick={handleLogout} className="w-full border border-red-500/30 text-red-400 py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-500/10"><LogOut size={18}/> Cerrar Sesión</button> </div> );
+            const renderHome = () => ( <div className="pb-24 animate-fade-in"> <div className="relative h-64 bg-slate-800 mb-6 overflow-hidden rounded-b-3xl shadow-xl flex items-end p-6"> <img src="https://i.postimg.cc/FRFN6xdB/wmremove-transformed.png" className="absolute inset-0 w-full h-full object-cover opacity-60" alt="Barber Background" /> <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent z-10"/> <div className="relative z-20"> <h2 className="text-amber-500 font-bold text-xs tracking-widest uppercase mb-1">Professional Barber</h2> <h1 className="text-3xl font-extrabold leading-none">ESTILO<br/>QUE DEFINE.</h1> {user?.isGuest && <div className="mt-2 inline-block bg-amber-500/20 text-amber-500 px-3 py-1 rounded-full text-xs font-bold border border-amber-500/50">MODO INVITADO</div>} </div> </div> <div className="px-6 space-y-4"> <div className="flex gap-4"><button onClick={()=>setView('book')} className="flex-1 bg-amber-500 py-4 rounded-2xl text-slate-900 font-bold shadow-lg flex flex-col items-center gap-1"><Calendar/><span className="text-xs">RESERVAR</span></button><button onClick={()=>setView('appointments')} className="flex-1 bg-slate-800 py-4 rounded-2xl border border-slate-700 flex flex-col items-center gap-1"><Clock/><span className="text-xs">MIS CITAS</span></button></div> <h3 className="font-bold text-lg">Servicios</h3> <div className="space-y-3">{services.map(s => <div key={s.id} className="bg-slate-800 p-4 rounded-xl flex items-center gap-4 border border-slate-700"><div className="text-amber-500 bg-slate-900 p-3 rounded-xl">{getIcon(s.iconName)}</div><div className="flex-1"><h4 className="font-bold">{s.title}</h4><p className="text-xs text-slate-400">RD$ {s.price}</p><p className="text-[10px] text-slate-500 line-clamp-1">{s.description}</p></div><button onClick={()=>{setSelService(s); setView('book');}} className="bg-slate-700 p-2 rounded-lg hover:bg-amber-500 hover:text-slate-900"><ChevronRight/></button></div>)}</div> </div> </div> );
 
             const renderContent = () => {
                 if(user?.isAdmin) {
