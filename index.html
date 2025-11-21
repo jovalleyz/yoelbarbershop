@@ -5,19 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Yoel Professional Barber</title>
     
-    <!-- PWA & Metadatos -->
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/483/483933.png">
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- Import Map -->
     <script type="importmap">
     {
       "imports": {
@@ -36,33 +32,11 @@
         .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
-        
-        /* Custom Date Input Styling */
-        input[type="date"] {
-            color-scheme: dark; 
-            position: relative;
-        }
-        input[type="date"]::-webkit-calendar-picker-indicator {
-            background: transparent;
-            bottom: 0;
-            color: transparent;
-            cursor: pointer;
-            height: auto;
-            left: 0;
-            position: absolute;
-            right: 0;
-            top: 0;
-            width: auto;
-        }
-        /* Spin Animation for Refresh */
+        input[type="date"] { color-scheme: dark; position: relative; }
+        input[type="date"]::-webkit-calendar-picker-indicator { background: transparent; bottom: 0; color: transparent; cursor: pointer; height: auto; left: 0; position: absolute; right: 0; top: 0; width: auto; }
         .spin-anim { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-        /* EFECTO NEÓN PARA CITA EXPRESS */
-        @keyframes neon-pulse {
-            0%, 100% { text-shadow: 0 0 4px #f59e0b; color: #fbbf24; }
-            50% { text-shadow: 0 0 12px #f59e0b, 0 0 20px #d97706; color: #ffffff; }
-        }
+        @keyframes neon-pulse { 0%, 100% { text-shadow: 0 0 4px #f59e0b; color: #fbbf24; } 50% { text-shadow: 0 0 12px #f59e0b, 0 0 20px #d97706; color: #ffffff; } }
         .text-neon { animation: neon-pulse 2s infinite ease-in-out; font-weight: 800; letter-spacing: 0.5px; }
     </style>
 </head>
@@ -70,7 +44,6 @@
     <div id="root"></div>
 
     <script>
-        // Protección para evitar el error de Service Worker en vista previa
         if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.protocol === 'http:')) {
             window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(console.error));
         }
@@ -79,12 +52,7 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useMemo } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { 
-            Scissors, Calendar, User, Home, Bell, Clock, ChevronRight, Star, LogOut, 
-            CheckCircle, X, Phone, Trash2, RefreshCw, Shield, DollarSign, AlertCircle, 
-            Smartphone, Zap, Search, Filter, Download, Plus, Edit2, Settings, TrendingUp, PieChart, Info, Lock, Unlock, CalendarOff, FileSpreadsheet
-        } from 'lucide-react';
-
+        import { Scissors, Calendar, User, Home, Bell, Clock, ChevronRight, Star, LogOut, CheckCircle, X, Phone, Trash2, RefreshCw, Shield, DollarSign, AlertCircle, Smartphone, Zap, Search, Filter, Download, Plus, Edit2, Settings, TrendingUp, PieChart, Info, Lock, Unlock, CalendarOff, FileSpreadsheet, Check, Monitor, ArrowLeft } from 'lucide-react';
         import { initializeApp } from "firebase/app";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
         import { getFirestore, collection, addDoc, getDocs, query, deleteDoc, updateDoc, doc, onSnapshot, where, writeBatch } from "firebase/firestore";
@@ -107,14 +75,12 @@
 
         const ADMIN_EMAIL = "admin@yoel.com";
         const TIME_SLOTS = ["09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM", "06:00 PM", "07:00 PM"];
-
         const DEFAULT_SERVICES = [
             { category: 'Corte', title: 'Corte Clásico', price: 500, duration: '45 min', description: 'Corte tradicional con tijera o máquina.', iconName: 'scissors' },
             { category: 'Corte', title: 'Fade / Degradado', price: 700, duration: '60 min', description: 'Degradado moderno con navaja.', iconName: 'scissors' },
             { category: 'Barba', title: 'Perfilado de Barba', price: 300, duration: '30 min', description: 'Alineación perfecta con navaja y toalla.', iconName: 'user' },
             { category: 'VIP', title: 'Experiencia Yoel', price: 1500, duration: '120 min', description: 'Corte, Barba, Mascarilla negra y Bebida de cortesía.', iconName: 'star' }
         ];
-
         const ICON_MAP = { scissors: Scissors, user: User, star: Star, zap: Zap };
         const getIcon = (name) => { const I = ICON_MAP[name] || Scissors; return <I className="w-6 h-6"/>; };
 
@@ -122,77 +88,55 @@
         const parseTime = (t, d) => { 
             if(!t||!d) return new Date(); 
             try {
-                const dt=new Date(d), [tm,m]=t.split(' '), [h,mn]=tm.split(':'); 
-                dt.setHours(h==='12'?0:parseInt(h)+(m==='PM'?12:0), mn, 0, 0); 
-                return isNaN(dt.getTime()) ? new Date() : dt;
+                const [year, month, day] = d.split('-').map(Number);
+                const [time, modifier] = t.split(' ');
+                let [hours, minutes] = time.split(':').map(Number);
+                if (hours === 12) hours = 0;
+                if (modifier === 'PM') hours += 12;
+                return new Date(year, month - 1, day, hours, minutes, 0, 0);
             } catch(e) { return new Date(); }
         };
+        const isPastTime = (t, d) => parseTime(t, d) < new Date();
         const cleanPhone = p => p ? p.replace(/\D/g, '') : '';
         const formatPhone = p => { if(!p) return 'N/A'; const c=(''+p).replace(/\D/g,''), m=c.match(/^(\d{3})(\d{3})(\d{4})$/); return m ? `(${m[1]}) ${m[2]}-${m[3]}` : p; };
         const cleanPhoneForSearch = v => v ? v.toString().replace(/\D/g, '') : '';
         const normalizeText = t => t ? t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : '';
 
-        // --- COMPONENTS ---
-        const SuccessModal = ({ show, onClose, appointmentDetails, allAppointments }) => {
-            if (!show || !appointmentDetails) return null;
+        // --- GLOBAL COMPONENTS ---
+        const UsersIcon = ({size, className}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
 
+        const NavItem = ({ i: Icon, l, id, activeId, onSelect }) => (
+            <button onClick={() => onSelect(id)} className={`flex flex-col items-center ${activeId === id ? 'text-amber-500' : 'text-slate-500'}`}>
+                <Icon size={24} strokeWidth={activeId === id ? 2.5 : 2} />
+                <span className="text-[10px] font-bold">{l}</span>
+            </button>
+        );
+
+        const SuccessModal = ({ show, onClose, appointmentDetails, allAppointments, isKiosk }) => {
+            useEffect(() => { if(show && isKiosk) { const t = setTimeout(onClose, 5000); return () => clearTimeout(t); } }, [show, isKiosk, onClose]);
             const queueCount = useMemo(() => {
-                if (!allAppointments) return 0;
+                if (!allAppointments || !appointmentDetails) return 0;
                 const currentDateTime = parseTime(appointmentDetails.time, appointmentDetails.date);
-                
-                const count = allAppointments.filter(a => {
-                    if (a.status === 'cancelada' || a.date !== appointmentDetails.date) return false;
-                    const aTime = parseTime(a.time, a.date);
-                    return aTime < currentDateTime;
+                return allAppointments.filter(a => {
+                    if (a.status === 'cancelada' || a.status === 'completed' || a.date !== appointmentDetails.date) return false;
+                    return parseTime(a.time, a.date) < currentDateTime;
                 }).length;
-                
-                return count;
             }, [allAppointments, appointmentDetails]);
 
+            if (!show || !appointmentDetails) return null;
             return (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/95 backdrop-blur-sm p-4 animate-fade-in">
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/95 backdrop-blur-sm p-4 animate-fade-in">
                     <div className="bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700 max-w-sm w-full text-center relative overflow-hidden mx-auto">
-                        <div className="w-24 h-24 mx-auto mb-6 relative">
-                            <svg className="checkmark w-24 h-24 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
-                                <circle className="checkmark__circle" cx="26" cy="26" r="25" fill="none" />
-                                <path className="checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8" />
-                            </svg>
-                        </div>
+                        <div className="w-24 h-24 mx-auto mb-6"><svg className="checkmark w-24 h-24 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52"><circle className="checkmark__circle" cx="26" cy="26" r="25" fill="none" /><path className="checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8" /></svg></div>
                         <h2 className="text-3xl font-bold text-white mb-2">¡Listo!</h2>
-                        <p className="text-slate-400 text-sm mb-6">Cita procesada correctamente.</p>
-                        
-                        <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 mb-4 text-left">
-                            <p className="text-amber-500 text-xs font-bold uppercase mb-1">Resumen</p>
-                            <p className="text-white font-bold text-lg">{appointmentDetails.serviceTitle}</p>
-                            <div className="flex justify-between mt-2 text-sm text-slate-400">
-                                <span>{appointmentDetails.date}</span><span>{appointmentDetails.time}</span>
-                            </div>
-                        </div>
-
-                        <div className="bg-blue-500/10 p-3 rounded-xl border border-blue-500/20 mb-6 flex items-start gap-3 text-left">
-                            <Users className="text-blue-400 shrink-0 mt-0.5" size={18} />
-                            <div>
-                                <p className="text-blue-200 text-xs leading-relaxed">
-                                    Hay <strong className="text-white">{queueCount} clientes</strong> antes de ti hoy, pero no te preocupes, <strong className="text-white">ya reservaste tu hora.</strong>
-                                </p>
-                            </div>
-                        </div>
-
+                        <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 mb-4 text-left"><p className="text-amber-500 text-xs font-bold uppercase mb-1">Resumen</p><p className="text-white font-bold text-lg">{appointmentDetails.serviceTitle}</p><div className="flex justify-between mt-2 text-sm text-slate-400"><span>{appointmentDetails.date}</span><span>{appointmentDetails.time}</span></div></div>
+                        <div className="bg-blue-500/10 p-3 rounded-xl border border-blue-500/20 mb-6 flex items-start gap-3 text-left"><UsersIcon className="text-blue-400 shrink-0 mt-0.5" size={18} /><div><p className="text-blue-200 text-xs leading-relaxed">Hay <strong className="text-white">{queueCount} clientes</strong> antes de ti hoy.{isKiosk && <span className="block mt-1 font-bold text-amber-400">Esta pantalla se cerrará automáticamente...</span>}</p></div></div>
                         <button onClick={onClose} className="w-full bg-amber-500 text-slate-900 font-bold py-4 rounded-xl active:scale-95 transition-transform">ENTENDIDO</button>
                     </div>
-                    <style>{`
-                        .checkmark__circle { stroke-dasharray: 166; stroke-dashoffset: 166; stroke-width: 2; stroke-miterlimit: 10; stroke: #22c55e; fill: none; animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards; }
-                        .checkmark { width: 80px; height: 80px; border-radius: 50%; display: block; stroke-width: 3; stroke: #fff; stroke-miterlimit: 10; box-shadow: inset 0px 0px 0px #22c55e; animation: fill .4s ease-in-out .4s forwards, scale .3s ease-in-out .9s both; }
-                        .checkmark__check { transform-origin: 50% 50%; stroke-dasharray: 48; stroke-dashoffset: 48; animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.8s forwards; }
-                        @keyframes stroke { 100% { stroke-dashoffset: 0; } }
-                        @keyframes scale { 0%, 100% { transform: none; } 50% { transform: scale3d(1.1, 1.1, 1); } }
-                        @keyframes fill { 100% { box-shadow: inset 0px 0px 0px 50px #22c55e; } }
-                    `}</style>
+                    <style>{`.checkmark__circle { stroke-dasharray: 166; stroke-dashoffset: 166; stroke-width: 2; stroke-miterlimit: 10; stroke: #22c55e; fill: none; animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards; } .checkmark { width: 80px; height: 80px; border-radius: 50%; display: block; stroke-width: 3; stroke: #fff; stroke-miterlimit: 10; box-shadow: inset 0px 0px 0px #22c55e; animation: fill .4s ease-in-out .4s forwards, scale .3s ease-in-out .9s both; } .checkmark__check { transform-origin: 50% 50%; stroke-dasharray: 48; stroke-dashoffset: 48; animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.8s forwards; } @keyframes stroke { 100% { stroke-dashoffset: 0; } } @keyframes scale { 0%, 100% { transform: none; } 50% { transform: scale3d(1.1, 1.1, 1); } } @keyframes fill { 100% { box-shadow: inset 0px 0px 0px 50px #22c55e; } }`}</style>
                 </div>
             );
         };
-        
-        const Users = ({size, className}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
 
         const ServiceModal = ({ show, onClose, onSave, initialData }) => {
             const [form, setForm] = useState({ title: '', price: '', duration: '30 min', description: '', iconName: 'scissors' });
@@ -204,11 +148,8 @@
                         <h3 className="text-xl font-bold mb-4 text-white">{initialData ? 'Editar' : 'Nuevo'} Servicio</h3>
                         <div className="space-y-3">
                             <div><label className="text-xs text-slate-400">Nombre</label><input className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white" value={form.title} onChange={e=>setForm({...form, title: e.target.value})} placeholder="Ej: Corte" /></div>
-                            <div className="flex gap-3">
-                                <div className="flex-1"><label className="text-xs text-slate-400">Precio</label><input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white" value={form.price} onChange={e=>setForm({...form, price: Number(e.target.value)})} /></div>
-                                <div className="flex-1"><label className="text-xs text-slate-400">Duración</label><input className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white" value={form.duration} onChange={e=>setForm({...form, duration: e.target.value})} /></div>
-                            </div>
-                            <div><label className="text-xs text-slate-400">Descripción</label><textarea className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white text-sm" rows="3" value={form.description} onChange={e=>setForm({...form, description: e.target.value})} placeholder="Detalles del servicio..." /></div>
+                            <div className="flex gap-3"><div className="flex-1"><label className="text-xs text-slate-400">Precio</label><input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white" value={form.price} onChange={e=>setForm({...form, price: Number(e.target.value)})} /></div><div className="flex-1"><label className="text-xs text-slate-400">Duración</label><input className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white" value={form.duration} onChange={e=>setForm({...form, duration: e.target.value})} /></div></div>
+                            <div><label className="text-xs text-slate-400">Descripción</label><textarea className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white text-sm" rows="3" value={form.description} onChange={e=>setForm({...form, description: e.target.value})} placeholder="Detalles..." /></div>
                             <div><label className="text-xs text-slate-400">Icono</label><div className="flex gap-2">{Object.keys(ICON_MAP).map(k=><button key={k} onClick={()=>setForm({...form, iconName: k})} className={`p-3 rounded-lg border ${form.iconName===k?'bg-amber-500 text-slate-900 border-amber-500':'bg-slate-900 border-slate-700 text-slate-400'}`}>{getIcon(k)}</button>)}</div></div>
                         </div>
                         <div className="flex gap-3 mt-6"><button onClick={onClose} className="flex-1 py-3 bg-slate-700 rounded-xl text-slate-300">Cancelar</button><button onClick={()=>onSave(form)} className="flex-1 py-3 bg-amber-500 text-slate-900 font-bold rounded-xl">Guardar</button></div>
@@ -217,13 +158,65 @@
             );
         };
 
+        const RevenueView = ({ appointments, downloadCSV }) => {
+            const [filter, setFilter] = useState('today');
+            const [customStart, setCustomStart] = useState('');
+            const [customEnd, setCustomEnd] = useState('');
+            const filteredApps = useMemo(() => {
+                const now = new Date(); let start = new Date(), end = new Date(); start.setHours(0,0,0,0); end.setHours(23,59,59,999);
+                if (filter === 'week') { const day = now.getDay(); const diff = now.getDate() - day + (day === 0 ? -6 : 1); start = new Date(now.setDate(diff)); start.setHours(0,0,0,0); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999); } 
+                else if (filter === 'month') { start = new Date(now.getFullYear(), now.getMonth(), 1); end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59); } 
+                else if (filter === 'custom') { if(!customStart || !customEnd) return []; start = new Date(customStart); end = new Date(customEnd); end.setHours(23,59,59,999); }
+                return appointments.filter(a => { if (a.status === 'cancelada') return false; const d = new Date(a.date + 'T00:00:00'); return d >= start && d <= end; });
+            }, [filter, customStart, customEnd, appointments]);
+            const totalRevenue = filteredApps.reduce((sum, a) => sum + (a.price || 0), 0);
+            const serviceStats = useMemo(() => { const stats = {}; filteredApps.forEach(a => { if (!stats[a.serviceTitle]) stats[a.serviceTitle] = {count: 0, amount: 0}; stats[a.serviceTitle].count += 1; stats[a.serviceTitle].amount += a.price; }); return Object.entries(stats).sort((a,b) => b[1].amount - a[1].amount); }, [filteredApps]);
+            
+            return (
+                <div className="pb-24 px-4 pt-20 animate-fade-in">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-white">Reportes Financieros</h2>
+                        <button onClick={() => downloadCSV(filteredApps)} className="bg-slate-800 text-amber-500 p-2 rounded-full border border-slate-700 hover:bg-slate-700"><FileSpreadsheet size={20}/></button>
+                    </div>
+                    <div className="flex bg-slate-800 p-1 rounded-xl mb-6 overflow-x-auto">{['today', 'week', 'month', 'custom'].map(f => (<button key={f} onClick={() => setFilter(f)} className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg whitespace-nowrap ${filter === f ? 'bg-amber-500 text-slate-900' : 'text-slate-400'}`}>{f === 'today' ? 'Hoy' : f === 'week' ? 'Semana' : f === 'month' ? 'Mes' : 'Rango'}</button>))}</div>
+                    {filter === 'custom' && (<div className="flex gap-2 mb-6"><div className="flex-1"><label className="text-[10px] text-slate-400 block mb-1">Inicio</label><input type="date" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs" value={customStart} onChange={e => setCustomStart(e.target.value)} /></div><div className="flex-1"><label className="text-[10px] text-slate-400 block mb-1">Fin</label><input type="date" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs" value={customEnd} onChange={e => setCustomEnd(e.target.value)} /></div></div>)}
+                    <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700 mb-8 shadow-xl"><div className="flex items-center justify-between mb-2"><span className="text-slate-400 text-sm font-medium">Ingresos Totales</span><div className="bg-green-500/10 p-2 rounded-full text-green-500"><DollarSign size={20}/></div></div><h3 className="text-3xl font-extrabold text-white mb-1">RD$ {totalRevenue.toLocaleString()}</h3><p className="text-xs text-slate-500">{filteredApps.length} citas realizadas</p></div>
+                    <h3 className="font-bold mb-4 flex items-center gap-2 text-white"><PieChart size={18} className="text-amber-500"/> Desglose por Servicio</h3>
+                    <div className="space-y-3">{serviceStats.map(([name, stat]) => (<div key={name} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center"><div><h4 className="font-bold text-white text-sm">{name}</h4><p className="text-xs text-slate-400">{stat.count} citas</p></div><span className="text-amber-500 font-bold">RD$ {stat.amount.toLocaleString()}</span></div>))} {serviceStats.length === 0 && <p className="text-center text-slate-500 text-sm py-4 italic">No hay datos.</p>}</div>
+                </div>
+            );
+        };
+
+        const BlockScheduleView = ({ blockedSlots, onSaveBlock, onDeleteBlock }) => { // Renamed props
+            const [bDate, setBDate] = useState(''); const [bTimes, setBTimes] = useState([]); const [bAllDay, setBAllDay] = useState(false);
+            const myBlocks = useMemo(() => blockedSlots.sort((a,b) => new Date(a.date) - new Date(b.date)), [blockedSlots]);
+            const toggleTime = (t) => { if (bTimes.includes(t)) setBTimes(bTimes.filter(x => x !== t)); else setBTimes([...bTimes, t]); };
+            
+            const handleSubmit = () => { // Local handler
+                onSaveBlock(bDate, bAllDay, bTimes, () => { setBDate(''); setBTimes([]); setBAllDay(false); });
+            };
+            
+            return (
+                <div className="pb-24 px-4 pt-20 animate-fade-in">
+                    <h2 className="text-2xl font-bold mb-6 text-white">Bloquear Horario</h2>
+                    <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 mb-8">
+                        <label className="text-xs text-slate-400 block mb-2">Fecha a bloquear</label>
+                        <div className="relative mb-4"><input type="date" min={new Date().toISOString().split('T')[0]} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white cursor-pointer" value={bDate} onChange={e => setBDate(e.target.value)} /><Calendar className="absolute right-4 top-3 text-amber-500 pointer-events-none" size={20} /></div>
+                        <div className="flex items-center gap-3 mb-4 bg-slate-900/50 p-3 rounded-lg cursor-pointer" onClick={() => setBAllDay(!bAllDay)}><div className={`w-5 h-5 rounded border flex items-center justify-center ${bAllDay ? 'bg-amber-500 border-amber-500' : 'border-slate-500'}`}>{bAllDay && <CheckCircle size={14} className="text-slate-900" />}</div><span className="text-sm text-white font-bold">Cerrar día completo</span></div>
+                        {!bAllDay && <div className="grid grid-cols-3 gap-2 mb-6">{TIME_SLOTS.map(t => <button key={t} onClick={() => toggleTime(t)} className={`py-2 text-[10px] font-bold rounded-lg border ${bTimes.includes(t) ? 'bg-red-500/20 text-red-400 border-red-500' : 'bg-slate-900 text-slate-400 border-slate-700'}`}>{t}</button>)}</div>}
+                        <button onClick={handleSubmit} className="w-full bg-amber-500 text-slate-900 font-bold py-3 rounded-xl flex items-center justify-center gap-2"><Lock size={18} /> BLOQUEAR</button>
+                    </div>
+                    <h3 className="font-bold mb-4 text-white text-sm">Bloqueos Activos</h3>
+                    <div className="space-y-3">{myBlocks.map(b => <div key={b.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center"><div><div className="flex items-center gap-2 text-amber-500 font-bold"><CalendarOff size={16} /> {b.date}</div><p className="text-xs text-slate-400 mt-1">{b.wholeDay ? 'Día Cerrado' : `${b.times.length} horas bloqueadas`}</p></div><button onClick={() => onDeleteBlock(b.id)} className="p-2 bg-slate-700 rounded-lg text-red-400 hover:bg-slate-600"><Trash2 size={18} /></button></div>)} {myBlocks.length === 0 && <p className="text-slate-500 text-center text-xs italic">No hay bloqueos.</p>}</div>
+                </div>
+            );
+        };
+
         const AuthScreen = ({ onLogin, deferredPrompt, handleInstallClick }) => {
             const [mode, setMode] = useState('login'); 
             const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [name, setName] = useState(''); const [phone, setPhone] = useState(''); 
             const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const [isLookup, setLookup] = useState(false);
-
             const getTabLabel = (m) => m === 'login' ? 'Acceder' : m === 'register' ? 'Registrarse' : 'Cita Express'; 
-
             const handleAuth = async (e) => {
                 e.preventDefault(); setError(''); setLoading(true);
                 if(mode === 'guest' && isLookup) {
@@ -245,25 +238,11 @@
                     setLoading(false);
                 }, 800);
             };
-
             return (
                 <div className="min-h-screen bg-slate-900 flex flex-col justify-center p-6 text-slate-100">
                     <div className="mb-6 text-center"><div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-white/20"><Scissors className="w-10 h-10 text-black"/></div><h1 className="text-4xl font-bold text-amber-500">YOEL</h1><p className="text-slate-400 text-sm">Professional Barber</p></div>
                     <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700 shadow-xl">
-                        {/* PESTAÑAS REORDENADAS: Acceder -> Cita Express -> Registrarse */}
-                        <div className="flex border-b border-slate-700 mb-6">
-                            {['login','guest','register'].map(m=>(
-                                <button 
-                                    key={m} 
-                                    onClick={()=>{setMode(m); setLookup(false);}} 
-                                    className={`flex-1 py-2 text-xs font-bold uppercase ${mode===m?'text-amber-500 border-b-2 border-amber-500':'text-slate-500'}`}
-                                >
-                                    <span className={m === 'guest' ? 'text-neon' : ''}>
-                                        {getTabLabel(m)}
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
+                        <div className="flex border-b border-slate-700 mb-6">{['login','guest','register'].map(m=><button key={m} onClick={()=>{setMode(m); setLookup(false);}} className={`flex-1 py-2 text-xs font-bold uppercase ${mode===m?'text-amber-500 border-b-2 border-amber-500':'text-slate-500'}`}><span className={m === 'guest' ? 'text-neon' : ''}>{getTabLabel(m)}</span></button>)}</div>
                         <form onSubmit={handleAuth} className="space-y-4">
                             {(mode==='register' || (mode==='guest' && !isLookup)) && <div className="relative"><User size={18} className="absolute left-3 top-3 text-slate-500"/><input className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-10 outline-none text-white focus:border-amber-500" placeholder="Nombre" value={name} onChange={e=>setName(e.target.value)}/></div>}
                             {mode==='guest' && <div className="relative"><Smartphone size={18} className="absolute left-3 top-3 text-slate-500"/><input type="tel" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-10 outline-none text-white focus:border-amber-500" placeholder="Teléfono" value={phone} onChange={e=>setPhone(e.target.value)}/></div>}
@@ -279,429 +258,138 @@
             );
         };
 
+        const KioskView = ({ appointments, onExit, onExpress }) => {
+            const [currentTime, setCurrentTime] = useState(new Date());
+            const todayStr = new Date().toISOString().split('T')[0];
+            useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(timer); }, []);
+            const todayList = useMemo(() => appointments.filter(a => a.date === todayStr && a.status !== 'cancelada' && a.status !== 'completed').sort((a, b) => parseTime(a.time, a.date) - parseTime(b.time, b.date)), [appointments, todayStr]);
+            return (
+                <div className="min-h-screen bg-slate-900 flex flex-col p-6 relative overflow-hidden">
+                    <button onClick={onExit} className="absolute top-4 left-4 text-slate-700 hover:text-slate-500"><ArrowLeft size={24}/></button>
+                    <div className="text-center mb-8 pt-4"><div className="flex items-center justify-center gap-3 mb-2"><Scissors className="text-amber-500" size={32} /><h1 className="text-3xl font-bold text-white tracking-widest">YOEL</h1></div><p className="text-slate-400 text-sm uppercase tracking-widest">Agenda del Día</p><div className="mt-6 text-6xl font-black text-white font-mono">{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div><p className="text-amber-500 font-bold mt-2">{currentTime.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
+                    <div className="flex-1 overflow-y-auto mb-6 pr-2">{todayList.length === 0 ? <div className="text-center py-10 opacity-40"><Calendar size={48} className="mx-auto mb-4"/><p>Agenda disponible.</p></div> : <div className="space-y-3">{todayList.map((app, idx) => { const isCompleted = app.status === 'completed'; return (<div key={app.id} className={`p-4 rounded-2xl flex items-center justify-between border ${isCompleted ? 'bg-slate-800/50 border-slate-800 opacity-50' : 'bg-slate-800 border-slate-700 shadow-lg'}`}><div className="flex items-center gap-4"><div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${isCompleted ? 'bg-slate-700 text-slate-400' : 'bg-amber-500 text-slate-900'}`}>{idx + 1}</div><div><h3 className={`font-bold ${isCompleted ? 'text-slate-400 line-through' : 'text-white'}`}>{app.userName.split(' ')[0]}</h3><p className="text-xs text-slate-400">{app.serviceTitle}</p></div></div><div className="text-right"><span className={`text-lg font-bold ${isCompleted ? 'text-slate-500' : 'text-amber-500'}`}>{app.time}</span></div></div>); })}</div>}</div>
+                    <button onClick={onExpress} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-white py-6 rounded-3xl shadow-2xl shadow-amber-500/20 flex items-center justify-center gap-3 active:scale-95 transition-transform"><div className="bg-white/20 p-2 rounded-full"><Plus size={24} className="text-white"/></div><div className="text-left"><p className="text-xs font-bold text-white/80 uppercase tracking-wider">¿Sin Cita?</p><h2 className="text-2xl font-bold leading-none">CITA EXPRESS</h2></div></button>
+                </div>
+            );
+        };
+        
+        const KioskAuth = ({ setView, handleKioskGuestLogin }) => {
+            const [name, setName] = useState(''); const [phone, setPhone] = useState('');
+            return (
+                <div className="min-h-screen bg-slate-900 flex flex-col justify-center p-6 animate-fade-in relative">
+                    <button onClick={() => setView('kiosk')} className="absolute top-4 left-4 text-slate-500"><X size={32} /></button>
+                    <h2 className="text-3xl font-bold text-white text-center mb-8">Datos para la Cita</h2>
+                    <div className="space-y-6">
+                        <div><label className="text-slate-400 text-sm block mb-2">Tu Nombre</label><input className="w-full bg-slate-800 p-4 rounded-xl text-xl text-white border border-slate-700" value={name} onChange={e=>setName(e.target.value)} placeholder="Ej: Juan"/></div>
+                        <div><label className="text-slate-400 text-sm block mb-2">Tu Teléfono</label><input type="tel" className="w-full bg-slate-800 p-4 rounded-xl text-xl text-white border border-slate-700" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="Ej: 809..."/></div>
+                        <button onClick={() => handleKioskGuestLogin({displayName: name, phone, email: '', isGuest: true})} disabled={!name || phone.length < 10} className="w-full bg-amber-500 py-5 rounded-xl text-slate-900 font-bold text-xl disabled:opacity-50">CONTINUAR</button>
+                    </div>
+                </div>
+            );
+        };
+
         // --- MAIN APP ---
         const App = () => {
             const [user, setUser] = useState(null);
-            const [view, setView] = useState('home');
+            const [view, setView] = useState('home'); 
             const [services, setServices] = useState([]);
             const [appointments, setAppointments] = useState([]);
-            const [blockedSlots, setBlockedSlots] = useState([]); // NEW: Blocked Slots State
+            const [blockedSlots, setBlockedSlots] = useState([]); 
             const [loading, setLoading] = useState(true);
             const [searchTerm, setSearchTerm] = useState('');
-            const [refreshKey, setRefreshKey] = useState(0); // Manual Refresh State
+            const [refreshKey, setRefreshKey] = useState(0);
             
-            // Booking
             const [selService, setSelService] = useState(null);
             const [selDate, setSelDate] = useState('');
             const [selTime, setSelTime] = useState('');
             const [editId, setEditId] = useState(null);
             const [origBooking, setOrigBooking] = useState(null);
-
-            // Admin Services
             const [showServiceModal, setShowServiceModal] = useState(false);
             const [editingService, setEditingService] = useState(null);
-
-            // PWA & Modals
+            const [manualName, setManualName] = useState(''); 
+            const [manualPhone, setManualPhone] = useState('');
             const [deferredPrompt, setDeferredPrompt] = useState(null);
             const [toast, setToast] = useState(null);
             const [showSuccessModal, setShowSuccessModal] = useState(false);
             const [lastBookedApp, setLastBookedApp] = useState(null);
             const [notifications, setNotifications] = useState([]);
-            const [isSpinning, setIsSpinning] = useState(false); // For refresh button
+            const [isSpinning, setIsSpinning] = useState(false); 
+            const [kioskTempUser, setKioskTempUser] = useState(null);
 
-            useEffect(() => {
-                const init = async () => { 
-                    if(!auth.currentUser) {
-                        await signInAnonymously(auth);
-                    }
-                };
-                init();
-
-                window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); setDeferredPrompt(e); });
-                
-                return onAuthStateChanged(auth, firebaseUser => {
-                    if (firebaseUser) {
-                        // Try to restore custom session
-                        const saved = localStorage.getItem('yoel_session');
-                        if (saved) {
-                            setUser({ ...firebaseUser, ...JSON.parse(saved) });
-                        } else {
-                            setUser(firebaseUser);
-                        }
-                    } else {
-                        setUser(null);
-                    }
-                    setLoading(false);
-                });
-            }, []);
-
-            // Persist session whenever user state changes
-            useEffect(() => {
-                if (user && user.displayName && !user.isAnonymous) { 
-                   if (user.isAdmin !== undefined || user.isGuest !== undefined) {
-                       const { uid, ...toSave } = user; 
-                       const customData = {
-                           displayName: user.displayName,
-                           email: user.email,
-                           phone: user.phone,
-                           isAdmin: user.isAdmin,
-                           isGuest: user.isGuest
-                       };
-                       localStorage.setItem('yoel_session', JSON.stringify(customData));
-                   }
-                }
-            }, [user]);
-
-            useEffect(() => {
-                if(!user) return;
-                
-                // Clean up previous listeners
-                const unsubServices = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'services')), s => {
-                    if(s.empty) {
-                        const b = writeBatch(db);
-                        DEFAULT_SERVICES.forEach(sv => b.set(doc(collection(db, 'artifacts', appId, 'public', 'data', 'services')), sv));
-                        b.commit();
-                    } else {
-                        setServices(s.docs.map(d=>({id:d.id, ...d.data()})));
-                    }
-                });
-
-                const unsubApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'appointments')), s => {
-                    setAppointments(s.docs.map(d=>({id:d.id, ...d.data()})));
-                });
-
-                const unsubBlocks = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'blocked_slots')), s => {
-                    setBlockedSlots(s.docs.map(d=>({id:d.id, ...d.data()})));
-                });
-
-                return () => {
-                    unsubServices();
-                    unsubApps();
-                    unsubBlocks();
-                };
-            }, [user, refreshKey]); // Trigger re-fetch when refreshKey changes
-
-            const handleManualRefresh = () => {
-                setIsSpinning(true);
-                setRefreshKey(k => k + 1);
-                showToast('Actualizando agenda...');
-                setTimeout(() => setIsSpinning(false), 1000);
-            };
-
-            const handleInstall = async () => {
-                if(deferredPrompt) { deferredPrompt.prompt(); if((await deferredPrompt.userChoice).outcome === 'accepted') setDeferredPrompt(null); }
-            };
-
-            const handleSaveService = async (data) => {
-                try {
-                    if(editingService) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'services', editingService.id), data);
-                    else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'services'), data);
-                    setShowServiceModal(false); setEditingService(null);
-                } catch(e) { console.error(e); }
-            };
-
-            const handleDeleteService = async (id) => {
-                if(confirm("¿Borrar servicio?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'services', id));
-            };
-
+            // 1. Handlers defined BEFORE usage
             const showToast = (msg, type='success') => { setToast({msg, type}); setTimeout(() => setToast(null), 3000); };
-
-            const handleBook = async () => {
+            const handleManualRefresh = () => { setIsSpinning(true); setRefreshKey(k => k + 1); showToast('Actualizando...'); setTimeout(() => setIsSpinning(false), 1000); };
+            const handleInstall = async () => { if(deferredPrompt) { deferredPrompt.prompt(); if((await deferredPrompt.userChoice).outcome === 'accepted') setDeferredPrompt(null); } };
+            const handleSaveService = async (data) => { try { if(editingService) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'services', editingService.id), data); else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'services'), data); setShowServiceModal(false); setEditingService(null); } catch(e) { console.error(e); } };
+            const handleDeleteService = async (id) => { if(confirm("¿Borrar servicio?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'services', id)); };
+            
+            const handleBook = async (tempUserOverride = null) => {
                 if(!selDate || !selTime || !selService) return;
                 try {
-                    let u = { uid: user.uid, name: user.displayName, email: user.email, phone: user.phone, isGuest: !!user.isGuest };
-                    if(user.isAdmin && origBooking) u = { uid: origBooking.userId, name: origBooking.userName, email: origBooking.userEmail, phone: origBooking.userPhone, isGuest: origBooking.isGuestBooking };
-                    const data = { serviceId: selService.id, serviceTitle: selService.title, price: selService.price, date: selDate, time: selTime, updatedAt: new Date().toISOString(), status: 'confirmada', userId: u.uid, userName: u.name, userEmail: u.email, userPhone: cleanPhone(u.phone), isGuestBooking: u.isGuest };
-                    
-                    if(editId) {
-                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', editId), data);
-                        showToast('Cita actualizada'); setView(user.isAdmin ? 'admin' : 'appointments');
+                    let u;
+                    if (tempUserOverride) {
+                        u = tempUserOverride;
+                    } else if (user?.isAdmin && !editId && manualName) {
+                        u = { uid: 'admin_manual_' + Date.now(), name: manualName, email: '', phone: manualPhone, isGuest: true };
+                    } else if (user?.isAdmin && origBooking) {
+                        u = { uid: origBooking.userId, name: origBooking.userName, email: origBooking.userEmail, phone: origBooking.userPhone, isGuest: origBooking.isGuestBooking };
                     } else {
-                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'appointments'), {...data, createdAt: new Date().toISOString()});
-                        setLastBookedApp(data); setShowSuccessModal(true);
+                        u = { uid: user.uid, name: user.displayName || 'Cliente', email: user.email || '', phone: user.phone || '', isGuest: !!user.isGuest };
                     }
-                    setEditId(null); setOrigBooking(null); setSelService(null); setSelDate(''); setSelTime('');
-                } catch(e) { console.error(e); showToast("Error al procesar", 'error'); }
+                    const finalName = u.name || u.displayName || 'Cliente'; 
+                    const data = { serviceId: selService.id, serviceTitle: selService.title, price: selService.price, date: selDate, time: selTime, updatedAt: new Date().toISOString(), status: 'confirmada', userId: u.uid, userName: finalName, userEmail: u.email || '', userPhone: cleanPhone(u.phone || ''), isGuestBooking: !!u.isGuest };
+                    if(editId) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', editId), data); showToast('Cita actualizada'); setView(user?.isAdmin ? 'admin' : 'appointments'); } 
+                    else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'appointments'), {...data, createdAt: new Date().toISOString()}); setLastBookedApp(data); setShowSuccessModal(true); }
+                    setEditId(null); setOrigBooking(null); setSelService(null); setSelDate(''); setSelTime(''); setManualName(''); setManualPhone('');
+                } catch(e) { console.error(e); showToast("Error", 'error'); }
             };
 
             const handleCancel = async (e, id) => { e.stopPropagation(); if(confirm("¿Cancelar cita?")) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', id)); showToast('Eliminada'); } };
+            const handleComplete = async (e, id) => { e.stopPropagation(); if(confirm("¿Marcar como atendido?")) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', id), { status: 'completed' }); showToast('Completado'); } };
             const handleStartReschedule = (app) => { setEditId(app.id); setOrigBooking(app); setSelService(services.find(s => s.id === app.serviceId) || services[0]); setSelDate(app.date); setSelTime(app.time); setView('book'); };
             const handleLogout = () => { localStorage.removeItem('yoel_session'); setUser(null); setView('home'); setSelService(null); }; 
+            const handleSaveBlock = async (d, ad, t, cb) => { if(!d) return showToast('Falta fecha','error'); if(!ad && t.length===0) return showToast('Falta hora','error'); try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'blocked_slots'), { date: d, times: ad?[]:t, wholeDay: ad, createdAt: new Date().toISOString() }); showToast('Guardado'); cb(); } catch{ showToast('Error','error'); } };
+            const handleDeleteBlock = async (id) => { if(confirm("¿Eliminar?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'blocked_slots', id)); };
+            
+            const enterKioskMode = () => setView('kiosk');
+            const startKioskBooking = () => setView('kiosk_auth'); 
+            const handleKioskGuestLogin = (g) => { setKioskTempUser({...g, uid: 'kiosk_'+Date.now()}); setView('kiosk_book'); };
 
-            // Derived Data with Block Logic
-            const takenTimes = useMemo(() => {
-                if (!selDate) return [];
-                const apptTimes = appointments.filter(a => a.date === selDate && a.status !== 'cancelada' && a.id !== editId).map(a => a.time);
-                const blocks = blockedSlots.filter(b => b.date === selDate);
-                const isFullDayBlocked = blocks.some(b => b.wholeDay);
-                const adminBlockedTimes = blocks.flatMap(b => b.times || []);
-                if (isFullDayBlocked) return TIME_SLOTS; 
-                return [...new Set([...apptTimes, ...adminBlockedTimes])];
-            }, [selDate, appointments, editId, blockedSlots]);
+            // Effects
+            useEffect(() => { const init = async () => { if(!auth.currentUser) await signInAnonymously(auth); }; init(); window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); setDeferredPrompt(e); }); return onAuthStateChanged(auth, firebaseUser => { if (firebaseUser) { const saved = localStorage.getItem('yoel_session'); if (saved) setUser({ ...firebaseUser, ...JSON.parse(saved) }); else setUser(firebaseUser); } else setUser(null); setLoading(false); }); }, []);
+            useEffect(() => { if (user && user.displayName && !user.isAnonymous && (user.isAdmin !== undefined || user.isGuest !== undefined)) { const customData = { displayName: user.displayName, email: user.email, phone: user.phone, isAdmin: user.isAdmin, isGuest: user.isGuest }; localStorage.setItem('yoel_session', JSON.stringify(customData)); } }, [user]);
+            useEffect(() => { if(!user) return; const u1 = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'services')), s => { if(s.empty) { const b = writeBatch(db); DEFAULT_SERVICES.forEach(sv => b.set(doc(collection(db, 'artifacts', appId, 'public', 'data', 'services')), sv)); b.commit(); } else setServices(s.docs.map(d=>({id:d.id, ...d.data()}))); }); const u2 = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'appointments')), s => setAppointments(s.docs.map(d=>({id:d.id, ...d.data()})))); const u3 = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'blocked_slots')), s => setBlockedSlots(s.docs.map(d=>({id:d.id, ...d.data()})))); return () => { u1(); u2(); u3(); }; }, [user, refreshKey]); 
 
-            const isDayFull = useMemo(() => {
-                if (!selDate) return false;
-                const blocks = blockedSlots.filter(b => b.date === selDate);
-                if (blocks.some(b => b.wholeDay)) return true;
-                return takenTimes.length >= TIME_SLOTS.length;
-            }, [selDate, blockedSlots, takenTimes]);
-
+            // Derived Data
+            const takenTimes = useMemo(() => { if (!selDate) return []; const apptTimes = appointments.filter(a => a.date === selDate && a.status !== 'cancelada' && a.id !== editId).map(a => a.time); const blocks = blockedSlots.filter(b => b.date === selDate); const isFullDayBlocked = blocks.some(b => b.wholeDay); const adminBlockedTimes = blocks.flatMap(b => b.times || []); if (isFullDayBlocked) return TIME_SLOTS; return [...new Set([...apptTimes, ...adminBlockedTimes])]; }, [selDate, appointments, editId, blockedSlots]);
+            const isDayFull = useMemo(() => { if (!selDate) return false; const blocks = blockedSlots.filter(b => b.date === selDate); if (blocks.some(b => b.wholeDay)) return true; return takenTimes.length >= TIME_SLOTS.length; }, [selDate, blockedSlots, takenTimes]);
             const clientApps = useMemo(() => (!user) ? [] : appointments.filter(a => user.isGuest ? a.userPhone === user.phone : a.userId === user.uid).sort((a,b) => parseTime(a.time, a.date) - parseTime(b.time, b.date)), [appointments, user]);
-            const adminApps = useMemo(() => {
-                let res = [...appointments];
-                if(searchTerm.trim()) {
-                    const cs = cleanPhoneForSearch(searchTerm), ts = normalizeText(searchTerm);
-                    res = res.filter(a => (cs && cleanPhoneForSearch(a.userPhone).includes(cs)) || normalizeText(a.userName).includes(ts));
-                }
-                return res.sort((a,b) => parseTime(a.time, a.date) - parseTime(b.time, b.date));
-            }, [appointments, searchTerm]);
+            const adminApps = useMemo(() => { let res = [...appointments].filter(a => a.status !== 'completed'); if(searchTerm.trim()) { const cs = cleanPhoneForSearch(searchTerm), ts = normalizeText(searchTerm); res = res.filter(a => (cs && cleanPhoneForSearch(a.userPhone).includes(cs)) || normalizeText(a.userName).includes(ts)); } return res.sort((a,b) => parseTime(a.time, a.date) - parseTime(b.time, b.date)); }, [appointments, searchTerm]);
 
-            // Notifications Hook
-            useEffect(() => {
-                if(!user?.isAdmin) return;
-                const interval = setInterval(() => {
-                    const now = new Date();
-                    appointments.forEach(a => {
-                        if(a.status === 'cancelada') return;
-                        const diff = Math.floor((parseTime(a.time, a.date) - now)/60000);
-                        if(diff === 15) {
-                            const msg = `Cita con ${a.userName} en 15 min.`;
-                            setNotifications(p => p.some(x => x.appId === a.id) ? p : [{id: Date.now(), appId: a.id, title: 'Recordatorio', message: msg, read: false, time: 'Ahora'}, ...p]);
-                        }
-                    });
-                }, 60000);
-                return () => clearInterval(interval);
-            }, [appointments, user]);
+            useEffect(() => { if(!user?.isAdmin) return; const interval = setInterval(() => { const now = new Date(); appointments.forEach(a => { if(a.status === 'cancelada') return; const diff = Math.floor((parseTime(a.time, a.date) - now)/60000); if(diff === 15) { const msg = `Cita con ${a.userName} en 15 min.`; setNotifications(p => p.some(x => x.appId === a.id) ? p : [{id: Date.now(), appId: a.id, title: 'Recordatorio', message: msg, read: false, time: 'Ahora'}, ...p]); } }); }, 60000); return () => clearInterval(interval); }, [appointments, user]);
 
-            // DOWNLOAD CSV
-            const downloadCSV = () => {
-                const appsToExport = adminApps; 
-                if (!appsToExport.length) return showToast('No hay datos para exportar', 'error');
-
-                const headers = ["Fecha", "Hora", "Cliente", "Teléfono", "Servicio", "Precio", "Estado", "Tipo"];
-                const rows = appsToExport.map(a => [
-                    a.date,
-                    a.time,
-                    `"${a.userName}"`, // Quote names with commas
-                    a.userPhone,
-                    `"${a.serviceTitle}"`,
-                    a.price,
-                    a.status,
-                    a.isGuestBooking ? 'Invitado' : 'Registrado'
-                ]);
-
-                const csvContent = [
-                    headers.join(","),
-                    ...rows.map(r => r.join(","))
-                ].join("\n");
-
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.setAttribute("href", url);
-                link.setAttribute("download", `reporte_barberia_yoel_${new Date().toISOString().split('T')[0]}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            };
-
-            const NavItem = ({i:Icon, l, id}) => <button onClick={()=>setView(id)} className={`flex flex-col items-center ${view===id ? 'text-amber-500' : 'text-slate-500'}`}><Icon size={24} strokeWidth={view===id?2.5:2}/><span className="text-[10px] font-bold">{l}</span></button>;
+            const downloadCSV = (data) => { if (!data.length) return showToast('No hay datos', 'error'); const headers = ["Fecha", "Hora", "Cliente", "Teléfono", "Servicio", "Precio", "Estado", "Tipo"]; const rows = data.map(a => [a.date, a.time, `"${a.userName}"`, a.userPhone, `"${a.serviceTitle}"`, a.price, a.status, a.isGuestBooking ? 'Invitado' : 'Registrado']); const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n"); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `reporte_barberia_yoel_${new Date().toISOString().split('T')[0]}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
             
             if(loading) return <div className="h-screen bg-slate-900 flex items-center justify-center text-amber-500 font-bold">CARGANDO...</div>;
-            if(!user || !user.displayName) return <AuthScreen onLogin={u => { 
-                const fullUser = {...auth.currentUser, ...u};
-                setUser(fullUser); 
-                setView(u.isAdmin ? 'admin' : 'home'); 
-            }} deferredPrompt={deferredPrompt} handleInstallClick={handleInstall} />;
+            if(!user || !user.displayName) return <AuthScreen onLogin={u => { const fullUser = {...auth.currentUser, ...u}; setUser(fullUser); setView(u.isAdmin ? 'admin' : 'home'); }} deferredPrompt={deferredPrompt} handleInstallClick={handleInstall} />;
 
-            // --- NEW: BLOCK SCHEDULE VIEW ---
-            const BlockScheduleView = () => {
-                const [bDate, setBDate] = useState('');
-                const [bTimes, setBTimes] = useState([]);
-                const [bAllDay, setBAllDay] = useState(false);
-                
-                const myBlocks = useMemo(() => blockedSlots.sort((a,b) => new Date(a.date) - new Date(b.date)), [blockedSlots]);
-                const toggleTime = (t) => { if (bTimes.includes(t)) setBTimes(bTimes.filter(x => x !== t)); else setBTimes([...bTimes, t]); };
-
-                const handleSaveBlock = async () => {
-                    if (!bDate) return showToast('Selecciona fecha', 'error');
-                    if (!bAllDay && bTimes.length === 0) return showToast('Selecciona horas', 'error');
-                    try {
-                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'blocked_slots'), { date: bDate, times: bAllDay ? [] : bTimes, wholeDay: bAllDay, createdAt: new Date().toISOString() });
-                        showToast('Bloqueo guardado'); setBDate(''); setBTimes([]); setBAllDay(false);
-                    } catch (e) { showToast('Error', 'error'); }
-                };
-                const handleDeleteBlock = async (id) => { if(confirm("¿Eliminar bloqueo?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'blocked_slots', id)); };
-
-                return (
-                    <div className="pb-24 px-4 pt-20 animate-fade-in">
-                        <h2 className="text-2xl font-bold mb-6 text-white">Bloquear Horario</h2>
-                        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 mb-8">
-                            <label className="text-xs text-slate-400 block mb-2">Fecha a bloquear</label>
-                            
-                            {/* SELECTOR DE FECHA MEJORADO */}
-                            <div className="relative mb-4">
-                                <input type="date" min={new Date().toISOString().split('T')[0]} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white cursor-pointer" value={bDate} onChange={e => setBDate(e.target.value)} id="date-block-input" />
-                                <Calendar className="absolute right-4 top-3 text-amber-500 pointer-events-none" size={20} />
-                            </div>
-                            
-                            <div className="flex items-center gap-3 mb-4 bg-slate-900/50 p-3 rounded-lg cursor-pointer" onClick={() => setBAllDay(!bAllDay)}><div className={`w-5 h-5 rounded border flex items-center justify-center ${bAllDay ? 'bg-amber-500 border-amber-500' : 'border-slate-500'}`}>{bAllDay && <CheckCircle size={14} className="text-slate-900" />}</div><span className="text-sm text-white font-bold">Cerrar día completo</span></div>
-                            {!bAllDay && <div className="grid grid-cols-3 gap-2 mb-6">{TIME_SLOTS.map(t => <button key={t} onClick={() => toggleTime(t)} className={`py-2 text-[10px] font-bold rounded-lg border ${bTimes.includes(t) ? 'bg-red-500/20 text-red-400 border-red-500' : 'bg-slate-900 text-slate-400 border-slate-700'}`}>{t}</button>)}</div>}
-                            <button onClick={handleSaveBlock} className="w-full bg-amber-500 text-slate-900 font-bold py-3 rounded-xl flex items-center justify-center gap-2"><Lock size={18} /> BLOQUEAR</button>
-                        </div>
-                        <h3 className="font-bold mb-4 text-white text-sm">Bloqueos Activos</h3>
-                        <div className="space-y-3">{myBlocks.map(b => <div key={b.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center"><div><div className="flex items-center gap-2 text-amber-500 font-bold"><CalendarOff size={16} /> {b.date}</div><p className="text-xs text-slate-400 mt-1">{b.wholeDay ? 'Día Cerrado' : `${b.times.length} horas bloqueadas`}</p></div><button onClick={() => handleDeleteBlock(b.id)} className="p-2 bg-slate-700 rounded-lg text-red-400 hover:bg-slate-600"><Trash2 size={18} /></button></div>)} {myBlocks.length === 0 && <p className="text-slate-500 text-center text-xs italic">No hay bloqueos.</p>}</div>
-                    </div>
-                );
-            };
-
-            // --- REVENUE VIEW ---
-            const RevenueView = () => {
-                const [filter, setFilter] = useState('today');
-                const [customStart, setCustomStart] = useState('');
-                const [customEnd, setCustomEnd] = useState('');
-                const filteredApps = useMemo(() => {
-                    const now = new Date(); let start = new Date(), end = new Date(); start.setHours(0,0,0,0); end.setHours(23,59,59,999);
-                    if (filter === 'week') { const day = now.getDay(); const diff = now.getDate() - day + (day === 0 ? -6 : 1); start = new Date(now.setDate(diff)); start.setHours(0,0,0,0); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999); } 
-                    else if (filter === 'month') { start = new Date(now.getFullYear(), now.getMonth(), 1); end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59); } 
-                    else if (filter === 'custom') { if(!customStart || !customEnd) return []; start = new Date(customStart); end = new Date(customEnd); end.setHours(23,59,59,999); }
-                    return appointments.filter(a => { if (a.status === 'cancelada') return false; const d = new Date(a.date + 'T00:00:00'); return d >= start && d <= end; });
-                }, [filter, customStart, customEnd, appointments]);
-                const totalRevenue = filteredApps.reduce((sum, a) => sum + (a.price || 0), 0);
-                const serviceStats = useMemo(() => { const stats = {}; filteredApps.forEach(a => { if (!stats[a.serviceTitle]) stats[a.serviceTitle] = {count: 0, amount: 0}; stats[a.serviceTitle].count += 1; stats[a.serviceTitle].amount += a.price; }); return Object.entries(stats).sort((a,b) => b[1].amount - a[1].amount); }, [filteredApps]);
-                return (
-                    <div className="pb-24 px-4 pt-20 animate-fade-in">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold text-white">Reportes Financieros</h2>
-                            <button onClick={downloadCSV} className="bg-slate-800 text-amber-500 p-2 rounded-full border border-slate-700 hover:bg-slate-700">
-                                <FileSpreadsheet size={20}/>
-                            </button>
-                        </div>
-                        <div className="flex bg-slate-800 p-1 rounded-xl mb-6 overflow-x-auto">{['today', 'week', 'month', 'custom'].map(f => (<button key={f} onClick={() => setFilter(f)} className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg whitespace-nowrap ${filter === f ? 'bg-amber-500 text-slate-900' : 'text-slate-400'}`}>{f === 'today' ? 'Hoy' : f === 'week' ? 'Semana' : f === 'month' ? 'Mes' : 'Rango'}</button>))}</div>
-                        {filter === 'custom' && (<div className="flex gap-2 mb-6"><div className="flex-1"><label className="text-[10px] text-slate-400 block mb-1">Inicio</label><input type="date" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs" value={customStart} onChange={e => setCustomStart(e.target.value)} /></div><div className="flex-1"><label className="text-[10px] text-slate-400 block mb-1">Fin</label><input type="date" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs" value={customEnd} onChange={e => setCustomEnd(e.target.value)} /></div></div>)}
-                        <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700 mb-8 shadow-xl"><div className="flex items-center justify-between mb-2"><span className="text-slate-400 text-sm font-medium">Ingresos Totales</span><div className="bg-green-500/10 p-2 rounded-full text-green-500"><DollarSign size={20}/></div></div><h3 className="text-3xl font-extrabold text-white mb-1">RD$ {totalRevenue.toLocaleString()}</h3><p className="text-xs text-slate-500">{filteredApps.length} citas realizadas</p></div>
-                        <h3 className="font-bold mb-4 flex items-center gap-2 text-white"><PieChart size={18} className="text-amber-500"/> Desglose por Servicio</h3>
-                        <div className="space-y-3">{serviceStats.map(([name, stat]) => (<div key={name} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center"><div><h4 className="font-bold text-white text-sm">{name}</h4><p className="text-xs text-slate-400">{stat.count} citas</p></div><span className="text-amber-500 font-bold">RD$ {stat.amount.toLocaleString()}</span></div>))} {serviceStats.length === 0 && <p className="text-center text-slate-500 text-sm py-4 italic">No hay datos.</p>}</div>
-                    </div>
-                );
-            };
-
-            // --- RENDERERS ---
-            const renderAdmin = () => {
-                const filteredCount = adminApps.length;
-                const revenue = adminApps.reduce((acc, c) => acc + (c.price||0), 0);
-                return (
-                    <div className="pb-24 px-4 pt-20 animate-fade-in">
-                        <div className="flex justify-between items-center mb-6"><div><h2 className="text-2xl font-bold">Panel Admin</h2><p className="text-xs text-slate-400">Bienvenido, Yoel</p></div><button onClick={()=>setView('notifications')} className="relative p-2 bg-slate-800 rounded-full border border-slate-700"><Bell size={20}/>{notifications.filter(n=>!n.read).length>0&&<span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full"/>}</button></div>
-                        <div className="relative mb-4"><Search className="absolute left-3 top-3.5 text-slate-500" size={18}/><input className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-white outline-none focus:border-amber-500" placeholder="Buscar..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />{searchTerm && <button onClick={()=>setSearchTerm('')} className="absolute right-3 top-3.5 text-slate-500"><X size={18}/></button>}</div>
-                        {searchTerm && <div className="flex justify-between items-center mb-6 text-xs text-slate-400 bg-slate-800/50 p-2 rounded-lg border border-slate-700"><span>Mostrando {filteredCount}</span><button onClick={()=>setSearchTerm('')} className="text-amber-500 underline">Ver todas</button></div>}
-                        <div className="grid grid-cols-2 gap-4 mb-8">
-                            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><Calendar size={16}/><span className="text-xs font-bold">Citas</span></div><p className="text-2xl font-bold">{filteredCount}</p></div>
-                            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><DollarSign size={16}/><span className="text-xs font-bold">Ingresos</span></div><p className="text-2xl font-bold text-amber-500">RD$ {revenue.toLocaleString()}</p></div>
-                        </div>
-                        <h3 className="font-bold mb-4 flex items-center gap-2 text-white">
-                            <Clock size={18} className="text-amber-500"/> 
-                            Agenda
-                            <button onClick={handleManualRefresh} className={`ml-2 hover:text-amber-500 transition-colors ${isSpinning ? 'spin-anim text-amber-500' : 'text-slate-500'}`}>
-                                <RefreshCw size={16} />
-                            </button>
-                        </h3>
-                        <div className="space-y-3">{adminApps.map(a => (
-                            <div key={a.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 relative">
-                                <div className="flex justify-between items-start">
-                                    <div><h4 className="font-bold text-white">{a.userName} {a.isGuestBooking && <span className="text-[10px] bg-slate-700 px-1 rounded text-slate-300">INVITADO</span>}</h4><p className="text-xs text-slate-400 font-mono mt-0.5 flex gap-1 items-center"><Phone size={10}/> {formatPhone(a.userPhone)}</p><div className="mt-2 text-sm font-medium text-amber-500">{a.serviceTitle}</div></div>
-                                    <div className="text-right"><p className="font-bold text-lg text-white">{a.time}</p><p className="text-xs text-slate-500">{a.date}</p></div>
-                                </div>
-                                <div className="mt-3 pt-3 border-t border-slate-700/50 flex justify-end gap-3"><button onClick={()=>handleStartReschedule(a)} className="px-3 py-1.5 bg-blue-500/10 text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1"><RefreshCw size={12}/> EDITAR</button><button onClick={e=>handleCancel(e, a.id)} className="px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold flex items-center gap-1"><Trash2 size={12}/> BORRAR</button></div>
-                            </div>
-                        ))}
-                        {adminApps.length===0 && <div className="text-center py-10 opacity-50"><Filter className="mx-auto mb-2"/><p>No hay resultados.</p></div>}</div>
-                    </div>
-                )
-            };
+            const renderBooking = (isKioskMode = false) => ( <div className={`animate-fade-in ${!isKioskMode && 'pb-24 px-6 pt-20'} ${isKioskMode && 'h-screen bg-slate-900 p-6 flex flex-col'}`}> {isKioskMode && <button onClick={()=>setView('kiosk')} className="mb-4 text-slate-500"><X size={32}/></button>} <div className="flex justify-between mb-6 items-center"><h2 className="text-2xl font-bold">{editId?'Editar':'Nueva'} Cita</h2>{editId && <button onClick={()=>{setEditId(null); setOrigBooking(null); setSelService(null);}} className="text-xs text-red-400 underline">Cancelar</button>}</div> {user?.isAdmin && !editId && !isKioskMode && (<div className="mb-6 bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-3"><p className="text-xs text-amber-500 font-bold uppercase">Datos del Cliente</p><input className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white" placeholder="Nombre del cliente" value={manualName} onChange={e=>setManualName(e.target.value)} /><input className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white" placeholder="Teléfono (opcional)" value={manualPhone} onChange={e=>setManualPhone(e.target.value)} /></div>)} {!selService ? (<div className="space-y-3 overflow-y-auto flex-1">{services.map(s => (<div key={s.id} onClick={()=>setSelService(s)} className="bg-slate-800 active:bg-slate-700 p-4 rounded-xl border border-slate-700 flex flex-col gap-2 active:scale-95 transition-transform"><div className="flex gap-4 items-center"><div className="text-amber-500 bg-slate-900 p-3 rounded-xl">{getIcon(s.iconName)}</div><div><h3 className="font-bold">{s.title}</h3><p className="text-amber-500 font-bold text-sm">RD$ {s.price}</p></div></div>{s.description && <p className="text-xs text-slate-400 pl-[60px]">{s.description}</p>}</div>))}</div>) : ( <div className="animate-fade-in flex-1 flex flex-col"> <div className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 mb-6"><div className="flex justify-between items-center mb-2"><div><p className="text-xs text-slate-400">Servicio</p><h3 className="font-bold">{selService.title}</h3></div><button onClick={()=>setSelService(null)}><RefreshCw size={14}/></button></div>{selService.description && <div className="bg-slate-900/50 p-3 rounded-lg text-xs text-slate-300 flex gap-2 border border-slate-700/50"><Info size={14} className="text-amber-500 shrink-0 mt-0.5"/> {selService.description}</div>}</div> {isKioskMode ? <div className="mb-6"><p className="text-slate-400 text-sm mb-2">Fecha</p><div className="text-xl font-bold text-white bg-slate-800 p-3 rounded-xl border border-slate-700">HOY ({new Date().toLocaleDateString()})</div></div> : <><label className="block text-sm font-bold mb-2 ml-1 text-slate-300">FECHA</label><div className="relative mb-6"><input type="date" min={new Date().toISOString().split('T')[0]} value={selDate} onChange={e=>setSelDate(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white cursor-pointer" /><Calendar className="absolute right-4 top-4 text-amber-500 pointer-events-none" size={24} /></div></>} {(selDate || isKioskMode) && (isDayFull && !isKioskMode ? <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl flex items-start gap-3 text-red-400 mb-8"><AlertCircle className="min-w-[20px] mt-0.5" /><div><p className="font-bold text-sm">No disponible</p></div></div> : <div className="mb-8"><label className="block text-sm font-bold mb-2 ml-1 text-slate-300">HORA</label><div className="grid grid-cols-3 gap-2">{TIME_SLOTS.map(t => { const dt = isKioskMode ? new Date().toISOString().split('T')[0] : selDate; const disabled = takenTimes.includes(t) || isPastTime(t, dt); return (<button key={t} disabled={disabled} onClick={()=>setSelTime(t)} className={`py-3 rounded-lg text-xs font-bold border ${disabled ? 'bg-slate-800/50 text-slate-600 border-slate-800 line-through opacity-50 cursor-not-allowed' : selTime === t ? 'bg-amber-500 text-slate-900 border-amber-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{t}</button>) })}</div></div>)} <div className="mt-auto"><button disabled={(!selDate && !isKioskMode) || !selTime} onClick={() => { if(isKioskMode) { setSelDate(new Date().toISOString().split('T')[0]); setTimeout(() => handleBook(kioskTempUser), 100); } else handleBook(); }} className="w-full bg-green-500 text-white font-bold py-4 rounded-xl disabled:bg-slate-800 disabled:text-slate-600 shadow-lg">CONFIRMAR</button></div> </div> )} </div> );
             
-            const renderAdminServices = () => (
-                <div className="pb-24 px-4 pt-20 animate-fade-in">
-                    <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold">Servicios</h2><button onClick={()=>{setEditingService(null); setShowServiceModal(true);}} className="p-2 bg-amber-500 rounded-full text-slate-900"><Plus/></button></div>
-                    <div className="space-y-3">{services.map(s => (
-                        <div key={s.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
-                            <div className="flex gap-4 items-center"><div className="bg-slate-900 p-3 rounded-xl text-amber-500">{getIcon(s.iconName)}</div><div><h4 className="font-bold text-white">{s.title}</h4><p className="text-slate-400 text-sm">RD$ {s.price}</p></div></div>
-                            <div className="flex gap-2"><button onClick={()=>{setEditingService(s); setShowServiceModal(true);}} className="p-2 bg-slate-700 rounded-lg text-blue-400"><Edit2 size={18}/></button><button onClick={()=>handleDeleteService(s.id)} className="p-2 bg-slate-700 rounded-lg text-red-400"><Trash2 size={18}/></button></div>
-                        </div>
-                    ))}</div>
-                </div>
-            );
-
-            const renderBooking = () => (
-                <div className="pb-24 px-6 pt-20 animate-fade-in">
-                    <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold">{editId?'Editar':'Nueva'} Cita</h2>{editId && <button onClick={()=>{setEditId(null); setOrigBooking(null); setSelService(null);}} className="text-xs text-red-400 underline">Cancelar</button>}</div>
-                    {!selService ? <div className="space-y-3">{services.map(s => <div key={s.id} onClick={()=>setSelService(s)} className="bg-slate-800 active:bg-slate-700 p-4 rounded-xl border border-slate-700 flex flex-col gap-2 active:scale-95 transition-transform"><div className="flex gap-4 items-center"><div className="text-amber-500 bg-slate-900 p-3 rounded-xl">{getIcon(s.iconName)}</div><div><h3 className="font-bold">{s.title}</h3><p className="text-amber-500 font-bold text-sm">RD$ {s.price}</p></div></div>{s.description && <p className="text-xs text-slate-400 pl-[60px]">{s.description}</p>}</div>)}</div> : 
-                    <div className="animate-fade-in">
-                        <div className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 mb-6">
-                            <div className="flex justify-between items-center mb-2"><div><p className="text-xs text-slate-400">Servicio</p><h3 className="font-bold">{selService.title}</h3></div><button onClick={()=>setSelService(null)}><RefreshCw size={14}/></button></div>
-                            {selService.description && <div className="bg-slate-900/50 p-3 rounded-lg text-xs text-slate-300 flex gap-2 border border-slate-700/50"><Info size={14} className="text-amber-500 shrink-0 mt-0.5"/> {selService.description}</div>}
-                        </div>
-                        <label className="block text-sm font-bold mb-2 ml-1 text-slate-300">FECHA</label>
-                        
-                        {/* SELECTOR DE FECHA MEJORADO (CLIENTE) */}
-                        <div className="relative mb-6">
-                            <input type="date" min={new Date().toISOString().split('T')[0]} value={selDate} onChange={e=>setSelDate(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white cursor-pointer" />
-                            <Calendar className="absolute right-4 top-4 text-amber-500 pointer-events-none" size={24} />
-                        </div>
-
-                        {selDate && (
-                            isDayFull ? 
-                            <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl flex items-start gap-3 text-red-400 mb-8"><AlertCircle className="min-w-[20px] mt-0.5" /><div><p className="font-bold text-sm">No disponible por el local</p><p className="text-xs mt-1">Este día ha sido bloqueado por el administrador.</p></div></div> 
-                            : 
-                            <div className="mb-8"><label className="block text-sm font-bold mb-2 ml-1 text-slate-300">HORA</label><div className="grid grid-cols-3 gap-2">{TIME_SLOTS.map(t => <button key={t} disabled={takenTimes.includes(t)} onClick={()=>setSelTime(t)} className={`py-3 rounded-lg text-xs font-bold border ${takenTimes.includes(t) ? 'bg-slate-800/50 text-slate-600 border-slate-800 line-through opacity-50 cursor-not-allowed' : selTime === t ? 'bg-amber-500 text-slate-900 border-amber-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{t}</button>)}</div></div>
-                        )}
-                        <button disabled={!selDate || !selTime || isDayFull} onClick={handleBook} className="w-full bg-green-500 text-white font-bold py-4 rounded-xl disabled:bg-slate-800 disabled:text-slate-600 shadow-lg">CONFIRMAR</button>
-                    </div>}
-                </div>
-            );
-
-            const renderClientAppointments = () => (
-                <div className="pb-24 px-6 pt-20 animate-fade-in">
-                    <h2 className="text-2xl font-bold mb-6">{view === 'notifications' ? 'Notificaciones' : 'Mis Citas'}</h2>
-                    {view === 'notifications' && notifications.map(n => <div key={n.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-blue-500 flex gap-3 mb-3"><Bell className="text-blue-500"/><div><h4 className="font-bold text-sm">{n.title}</h4><p className="text-xs text-slate-400">{n.message}</p></div></div>)}
-                    {view === 'appointments' && (clientApps.length === 0 ? <div className="text-center py-20 opacity-50"><Calendar size={64} className="mx-auto mb-4"/><p>No tienes citas.</p><button onClick={()=>setView('book')} className="mt-4 text-amber-500 underline">Agendar</button></div> : 
-                    <div className="space-y-4">{clientApps.map(a => <div key={a.id} className="bg-slate-800 p-5 rounded-2xl border border-slate-700"><div className="flex justify-between mb-2"><h3 className="font-bold">{a.serviceTitle}</h3><span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs font-bold">{a.status}</span></div><p className="text-amber-500 font-bold mb-2">RD$ {a.price}</p><div className="flex gap-4 text-sm text-slate-400 mb-4"><span>{a.date}</span><span>{a.time}</span></div><div className="flex gap-2"><button onClick={e=>handleCancel(e, a.id)} className="flex-1 py-2 bg-slate-900 rounded-lg text-red-400 text-xs font-bold">CANCELAR</button><button onClick={()=>handleStartReschedule(a)} className="flex-1 py-2 bg-amber-500 rounded-lg text-slate-900 text-xs font-bold">REAGENDAR</button></div></div>)}</div>)}
-                </div>
-            );
-
-            const renderProfile = () => (
-                <div className="pb-24 px-6 pt-20 animate-fade-in">
-                    <div className="bg-slate-800 rounded-2xl p-6 text-center border border-slate-700 mb-6"><div className="w-24 h-24 bg-slate-900 rounded-full mx-auto mb-4 flex items-center justify-center border-2 border-amber-500"><User className="w-10 h-10 text-amber-500"/></div><h2 className="text-2xl font-bold">{user.displayName}</h2><p className="text-sm text-slate-500">{user.email||user.phone}</p>{user.isGuest && <span className="inline-block mt-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">INVITADO</span>}</div>
-                    <button onClick={handleLogout} className="w-full border border-red-500/30 text-red-400 py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-500/10"><LogOut size={18}/> Cerrar Sesión</button>
-                </div>
-            );
-
-            const renderHome = () => (
-                <div className="pb-24 animate-fade-in">
-                    <div className="relative h-64 bg-slate-800 mb-6 overflow-hidden rounded-b-3xl shadow-xl flex items-end p-6">
-                        <img src="https://i.postimg.cc/FRFN6xdB/wmremove-transformed.png" className="absolute inset-0 w-full h-full object-cover opacity-60" alt="Barber Background" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent z-10"/>
-                        <div className="relative z-20">
-                            <h2 className="text-amber-500 font-bold text-xs tracking-widest uppercase mb-1">Professional Barber</h2>
-                            <h1 className="text-3xl font-extrabold leading-none">ESTILO<br/>QUE DEFINE.</h1>
-                            {user?.isGuest && <div className="mt-2 inline-block bg-amber-500/20 text-amber-500 px-3 py-1 rounded-full text-xs font-bold border border-amber-500/50">MODO INVITADO</div>}
-                        </div>
-                    </div>
-                    <div className="px-6 space-y-4">
-                        <div className="flex gap-4"><button onClick={()=>setView('book')} className="flex-1 bg-amber-500 py-4 rounded-2xl text-slate-900 font-bold shadow-lg flex flex-col items-center gap-1"><Calendar/><span className="text-xs">RESERVAR</span></button><button onClick={()=>setView('appointments')} className="flex-1 bg-slate-800 py-4 rounded-2xl border border-slate-700 flex flex-col items-center gap-1"><Clock/><span className="text-xs">MIS CITAS</span></button></div>
-                        <h3 className="font-bold text-lg">Servicios</h3>
-                        <div className="space-y-3">{services.map(s => <div key={s.id} className="bg-slate-800 p-4 rounded-xl flex items-center gap-4 border border-slate-700"><div className="text-amber-500 bg-slate-900 p-3 rounded-xl">{getIcon(s.iconName)}</div><div className="flex-1"><h4 className="font-bold">{s.title}</h4><p className="text-xs text-slate-400">RD$ {s.price}</p><p className="text-[10px] text-slate-500 line-clamp-1">{s.description}</p></div><button onClick={()=>{setSelService(s); setView('book');}} className="bg-slate-700 p-2 rounded-lg hover:bg-amber-500 hover:text-slate-900"><ChevronRight/></button></div>)}</div>
-                    </div>
-                </div>
-            );
+            const renderAdmin = () => ( <div className="pb-24 px-4 pt-20 animate-fade-in"> <div className="flex justify-between items-center mb-6"><div><h2 className="text-2xl font-bold">Panel Admin</h2><p className="text-xs text-slate-400">Bienvenido, Yoel</p></div><div className="flex gap-2"><button onClick={enterKioskMode} className="relative p-2 bg-slate-800 rounded-full border border-slate-700 text-amber-500"><Monitor size={20}/></button><button onClick={()=>setView('notifications')} className="relative p-2 bg-slate-800 rounded-full border border-slate-700"><Bell size={20}/>{notifications.filter(n=>!n.read).length>0&&<span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full"/>}</button></div></div> <div className="relative mb-4"><Search className="absolute left-3 top-3.5 text-slate-500" size={18}/><input className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-white outline-none focus:border-amber-500" placeholder="Buscar..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />{searchTerm && <button onClick={()=>setSearchTerm('')} className="absolute right-3 top-3.5 text-slate-500"><X size={18}/></button>}</div> {searchTerm && <div className="flex justify-between items-center mb-6 text-xs text-slate-400 bg-slate-800/50 p-2 rounded-lg border border-slate-700"><span>Mostrando {adminApps.length}</span><button onClick={()=>setSearchTerm('')} className="text-amber-500 underline">Ver todas</button></div>} <div className="grid grid-cols-2 gap-4 mb-8"><div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><Calendar size={16}/><span className="text-xs font-bold">Citas</span></div><p className="text-2xl font-bold">{adminApps.length}</p></div><div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><DollarSign size={16}/><span className="text-xs font-bold">Ingresos</span></div><p className="text-2xl font-bold text-amber-500">RD$ {adminApps.reduce((a,c)=>a+(c.price||0),0).toLocaleString()}</p></div></div> <h3 className="font-bold mb-4 flex items-center gap-2 text-white"><Clock size={18} className="text-amber-500"/> Agenda <button onClick={handleManualRefresh} className={`ml-2 hover:text-amber-500 transition-colors ${isSpinning ? 'spin-anim text-amber-500' : 'text-slate-500'}`}><RefreshCw size={16} /></button> <button onClick={() => { setView('book'); setManualName(''); setManualPhone(''); }} className="ml-auto bg-amber-500 text-slate-900 p-1 rounded-lg"><Plus size={16} /></button></h3> <div className="space-y-3">{adminApps.map(a => (<div key={a.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 relative"><div className="flex justify-between items-start"><div><h4 className="font-bold text-white">{a.userName} {a.isGuestBooking && <span className="text-[10px] bg-slate-700 px-1 rounded text-slate-300">INVITADO</span>}</h4><p className="text-xs text-slate-400 font-mono mt-0.5 flex gap-1 items-center"><Phone size={10}/> {formatPhone(a.userPhone)}</p><div className="mt-2 text-sm font-medium text-amber-500">{a.serviceTitle}</div></div><div className="text-right"><p className="font-bold text-lg text-white">{a.time}</p><p className="text-xs text-slate-500">{a.date}</p></div></div><div className="mt-3 pt-3 border-t border-slate-700/50 flex justify-end gap-3"><button onClick={(e) => handleComplete(e, a.id)} className="px-3 py-1.5 bg-green-500/10 text-green-400 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-green-500/20"><Check size={12} /> ATENDIDO</button><button onClick={()=>handleStartReschedule(a)} className="px-3 py-1.5 bg-blue-500/10 text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1"><RefreshCw size={12}/> EDITAR</button><button onClick={e=>handleCancel(e, a.id)} className="px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold flex items-center gap-1"><Trash2 size={12}/> BORRAR</button></div></div>))} {adminApps.length===0 && <div className="text-center py-10 opacity-50"><Filter className="mx-auto mb-2"/><p>No hay resultados.</p></div>}</div> </div> );
+            const renderAdminServices = () => ( <div className="pb-24 px-4 pt-20 animate-fade-in"> <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold">Servicios</h2><button onClick={()=>{setEditingService(null); setShowServiceModal(true);}} className="p-2 bg-amber-500 rounded-full text-slate-900"><Plus/></button></div> <div className="space-y-3">{services.map(s => ( <div key={s.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center"> <div className="flex gap-4 items-center"><div className="bg-slate-900 p-3 rounded-xl text-amber-500">{getIcon(s.iconName)}</div><div><h4 className="font-bold text-white">{s.title}</h4><p className="text-slate-400 text-sm">RD$ {s.price}</p></div></div> <div className="flex gap-2"><button onClick={()=>{setEditingService(s); setShowServiceModal(true);}} className="p-2 bg-slate-700 rounded-lg text-blue-400"><Edit2 size={18}/></button><button onClick={()=>handleDeleteService(s.id)} className="p-2 bg-slate-700 rounded-lg text-red-400"><Trash2 size={18}/></button></div> </div> ))}</div> </div> );
+            const renderRevenue = () => <RevenueView appointments={appointments} downloadCSV={downloadCSV} />;
+            const renderBlockSchedule = () => <BlockScheduleView blockedSlots={blockedSlots} onSaveBlock={handleSaveBlock} onDeleteBlock={handleDeleteBlock} />;
 
             const renderContent = () => {
-                if(user.isAdmin) {
+                if(user?.isAdmin) {
                     if(view === 'services') return renderAdminServices();
-                    if(view === 'revenue') return <RevenueView />;
+                    if(view === 'revenue') return renderRevenue();
                     if(view === 'book') return renderBooking();
                     if(view === 'notifications') return renderClientAppointments();
-                    if(view === 'blocks') return <BlockScheduleView />; // NEW: Block View
+                    if(view === 'blocks') return renderBlockSchedule();
+                    if(view === 'kiosk') return <KioskView appointments={appointments} onExit={()=>setView('admin')} onExpress={startKioskBooking} />;
+                    if(view === 'kiosk_auth') return <KioskAuth setView={setView} handleKioskGuestLogin={handleKioskGuestLogin} />;
+                    if(view === 'kiosk_book') return renderBooking(true);
                     return renderAdmin();
                 }
                 if(view === 'home') return renderHome();
@@ -713,24 +401,32 @@
 
             return (
                 <div className="min-h-screen bg-slate-900 font-sans text-white pb-safe">
-                    <header className="fixed top-0 w-full bg-slate-900/95 backdrop-blur z-40 px-6 h-16 flex justify-between items-center border-b border-slate-800"><div className="flex items-center gap-2"><Scissors className="text-amber-500"/><span className="font-bold text-xl">YOEL</span></div></header>
-                    <main className="min-h-screen">{renderContent()}</main>
-                    <nav className="fixed bottom-0 w-full bg-slate-800/95 backdrop-blur border-t border-slate-700 pb-safe px-6 h-20 flex justify-between items-center z-50 shadow-2xl">
-                        {user.isAdmin ? (
-                            <div className="w-full flex justify-around">
-                                <NavItem i={Home} l="Panel" id="admin"/>
-                                <NavItem i={Settings} l="Servicios" id="services"/>
-                                <NavItem i={TrendingUp} l="Ingresos" id="revenue"/>
-                                <NavItem i={Lock} l="Bloqueos" id="blocks"/> {/* NEW Nav Item */}
-                                <button onClick={handleLogout} className="text-red-400 flex flex-col items-center"><LogOut/><span className="text-[10px] font-bold">Salir</span></button>
-                            </div>
-                        ) : (
-                            <><NavItem i={Home} l="Inicio" id="home"/><NavItem i={Calendar} l="Agendar" id="book"/><NavItem i={Clock} l="Citas" id="appointments"/><NavItem i={User} l="Perfil" id="profile"/></>
-                        )}
-                    </nav>
+                    {view !== 'kiosk' && view !== 'kiosk_auth' && view !== 'kiosk_book' && (
+                        <header className="fixed top-0 w-full bg-slate-900/95 backdrop-blur z-40 px-6 h-16 flex justify-between items-center border-b border-slate-800"><div className="flex items-center gap-2"><Scissors className="text-amber-500"/><span className="font-bold text-xl">YOEL</span></div></header>
+                    )}
+                    <main className={view.startsWith('kiosk') ? '' : 'min-h-screen pt-16'}>{renderContent()}</main>
+                    {view !== 'kiosk' && view !== 'kiosk_auth' && view !== 'kiosk_book' && (
+                        <nav className="fixed bottom-0 w-full bg-slate-800/95 backdrop-blur border-t border-slate-700 pb-safe px-6 h-20 flex justify-between items-center z-50 shadow-2xl">
+                            {user?.isAdmin ? (
+                                <div className="w-full flex justify-around">
+                                    <NavItem i={Home} l="Panel" id="admin" activeId={view} onSelect={setView}/>
+                                    <NavItem i={Settings} l="Servicios" id="services" activeId={view} onSelect={setView}/>
+                                    <NavItem i={TrendingUp} l="Ingresos" id="revenue" activeId={view} onSelect={setView}/>
+                                    <NavItem i={Lock} l="Bloqueos" id="blocks" activeId={view} onSelect={setView}/> 
+                                    <button onClick={handleLogout} className="text-red-400 flex flex-col items-center"><LogOut/><span className="text-[10px] font-bold">Salir</span></button>
+                                </div>
+                            ) : (
+                                <><NavItem i={Home} l="Inicio" id="home" activeId={view} onSelect={setView}/><NavItem i={Calendar} l="Agendar" id="book" activeId={view} onSelect={setView}/><NavItem i={Clock} l="Citas" id="appointments" activeId={view} onSelect={setView}/><NavItem i={User} l="Perfil" id="profile" activeId={view} onSelect={setView}/></>
+                            )}
+                        </nav>
+                    )}
                     <ServiceModal show={showServiceModal} onClose={()=>setShowServiceModal(false)} onSave={handleSaveService} initialData={editingService} />
-                    <SuccessModal show={showSuccessModal} onClose={()=>{setShowSuccessModal(false); setView('appointments');}} appointmentDetails={lastBookedApp} allAppointments={appointments} />
-                    {toast && <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] animate-bounce-in px-4 w-full max-w-sm"><div className={`text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 font-medium ${toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>{toast.type === 'success' ? <CheckCircle size={24}/> : <X size={24}/>} {toast.msg}</div></div>}
+                    <SuccessModal show={showSuccessModal} onClose={()=>{
+                        setShowSuccessModal(false); 
+                        if(view === 'kiosk_book') setView('kiosk');
+                        else setView('appointments');
+                    }} appointmentDetails={lastBookedApp} allAppointments={appointments} isKiosk={view==='kiosk_book'} />
+                    {toast && <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[200] animate-bounce-in px-4 w-full max-w-sm"><div className={`text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 font-medium ${toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>{toast.type === 'success' ? <CheckCircle size={24}/> : <X size={24}/>} {toast.msg}</div></div>}
                 </div>
             );
         };
