@@ -42,6 +42,7 @@
     <div id="root"></div>
 
     <script>
+        // Protección para evitar el error de Service Worker en vista previa
         if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.protocol === 'http:')) {
             window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(console.error));
         }
@@ -104,8 +105,22 @@
         const normalizeText = t => t ? t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : '';
 
         // --- COMPONENTS ---
-        const SuccessModal = ({ show, onClose, appointmentDetails }) => {
-            if (!show) return null;
+        const SuccessModal = ({ show, onClose, appointmentDetails, allAppointments }) => {
+            if (!show || !appointmentDetails) return null;
+
+            const queueCount = useMemo(() => {
+                if (!allAppointments) return 0;
+                const currentDateTime = parseTime(appointmentDetails.time, appointmentDetails.date);
+                
+                const count = allAppointments.filter(a => {
+                    if (a.status === 'cancelada' || a.date !== appointmentDetails.date) return false;
+                    const aTime = parseTime(a.time, a.date);
+                    return aTime < currentDateTime;
+                }).length;
+                
+                return count;
+            }, [allAppointments, appointmentDetails]);
+
             return (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/95 backdrop-blur-sm p-4 animate-fade-in">
                     <div className="bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700 max-w-sm w-full text-center relative overflow-hidden mx-auto">
@@ -117,15 +132,24 @@
                         </div>
                         <h2 className="text-3xl font-bold text-white mb-2">¡Listo!</h2>
                         <p className="text-slate-400 text-sm mb-6">Cita procesada correctamente.</p>
-                        {appointmentDetails && (
-                            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 mb-6 text-left">
-                                <p className="text-amber-500 text-xs font-bold uppercase mb-1">Resumen</p>
-                                <p className="text-white font-bold text-lg">{appointmentDetails.serviceTitle}</p>
-                                <div className="flex justify-between mt-2 text-sm text-slate-400">
-                                    <span>{appointmentDetails.date}</span><span>{appointmentDetails.time}</span>
-                                </div>
+                        
+                        <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 mb-4 text-left">
+                            <p className="text-amber-500 text-xs font-bold uppercase mb-1">Resumen</p>
+                            <p className="text-white font-bold text-lg">{appointmentDetails.serviceTitle}</p>
+                            <div className="flex justify-between mt-2 text-sm text-slate-400">
+                                <span>{appointmentDetails.date}</span><span>{appointmentDetails.time}</span>
                             </div>
-                        )}
+                        </div>
+
+                        <div className="bg-blue-500/10 p-3 rounded-xl border border-blue-500/20 mb-6 flex items-start gap-3 text-left">
+                            <Users className="text-blue-400 shrink-0 mt-0.5" size={18} />
+                            <div>
+                                <p className="text-blue-200 text-xs leading-relaxed">
+                                    Hay <strong className="text-white">{queueCount} clientes</strong> antes de ti hoy, pero no te preocupes, <strong className="text-white">ya reservaste tu hora.</strong>
+                                </p>
+                            </div>
+                        </div>
+
                         <button onClick={onClose} className="w-full bg-amber-500 text-slate-900 font-bold py-4 rounded-xl active:scale-95 transition-transform">ENTENDIDO</button>
                     </div>
                     <style>{`
@@ -139,6 +163,8 @@
                 </div>
             );
         };
+        
+        const Users = ({size, className}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
 
         const ServiceModal = ({ show, onClose, onSave, initialData }) => {
             const [form, setForm] = useState({ title: '', price: '', duration: '30 min', description: '', iconName: 'scissors' });
@@ -241,13 +267,49 @@
             const [notifications, setNotifications] = useState([]);
 
             useEffect(() => {
-                const init = async () => { if(!auth.currentUser) await signInAnonymously(auth); };
+                const init = async () => { 
+                    if(!auth.currentUser) {
+                        await signInAnonymously(auth);
+                    }
+                };
                 init();
+
                 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); setDeferredPrompt(e); });
-                return onAuthStateChanged(auth, u => {
-                    setUser(u); setLoading(false);
+                
+                return onAuthStateChanged(auth, firebaseUser => {
+                    if (firebaseUser) {
+                        // Try to restore custom session
+                        const saved = localStorage.getItem('yoel_session');
+                        if (saved) {
+                            setUser({ ...firebaseUser, ...JSON.parse(saved) });
+                        } else {
+                            setUser(firebaseUser);
+                        }
+                    } else {
+                        setUser(null);
+                    }
+                    setLoading(false);
                 });
             }, []);
+
+            // Persist session whenever user state changes
+            useEffect(() => {
+                if (user && user.displayName && !user.isAnonymous) { // isAnonymous check might be tricky if we use anonymous auth for everyone. Better check custom props.
+                   // Actually we just save if we have our custom props like displayName or isAdmin
+                   if (user.isAdmin !== undefined || user.isGuest !== undefined) {
+                       const { uid, ...toSave } = user; // Save everything except uid/token stuff handled by firebase
+                       // Actually simplest is to save the custom fields we merged
+                       const customData = {
+                           displayName: user.displayName,
+                           email: user.email,
+                           phone: user.phone,
+                           isAdmin: user.isAdmin,
+                           isGuest: user.isGuest
+                       };
+                       localStorage.setItem('yoel_session', JSON.stringify(customData));
+                   }
+                }
+            }, [user]);
 
             useEffect(() => {
                 if(!user) return;
@@ -309,32 +371,24 @@
 
             const handleCancel = async (e, id) => { e.stopPropagation(); if(confirm("¿Cancelar cita?")) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', id)); showToast('Eliminada'); } };
             const handleStartReschedule = (app) => { setEditId(app.id); setOrigBooking(app); setSelService(services.find(s => s.id === app.serviceId) || services[0]); setSelDate(app.date); setSelTime(app.time); setView('book'); };
+            const handleLogout = () => { localStorage.removeItem('yoel_session'); setUser(null); setView('home'); setSelService(null); }; // FIX: Logout clears storage
 
             // Derived Data with Block Logic
             const takenTimes = useMemo(() => {
                 if (!selDate) return [];
-                
-                // 1. Blocked by appointments
-                const apptTimes = appointments
-                    .filter(a => a.date === selDate && a.status !== 'cancelada' && a.id !== editId)
-                    .map(a => a.time);
-                
-                // 2. Blocked by Admin (Full Day or specific hours)
+                const apptTimes = appointments.filter(a => a.date === selDate && a.status !== 'cancelada' && a.id !== editId).map(a => a.time);
                 const blocks = blockedSlots.filter(b => b.date === selDate);
                 const isFullDayBlocked = blocks.some(b => b.wholeDay);
                 const adminBlockedTimes = blocks.flatMap(b => b.times || []);
-
-                if (isFullDayBlocked) return TIME_SLOTS; // All times blocked
-
+                if (isFullDayBlocked) return TIME_SLOTS; 
                 return [...new Set([...apptTimes, ...adminBlockedTimes])];
             }, [selDate, appointments, editId, blockedSlots]);
 
-            // Check if day is FULL (either by appointments or admin block)
             const isDayFull = useMemo(() => {
                 if (!selDate) return false;
                 const blocks = blockedSlots.filter(b => b.date === selDate);
-                if (blocks.some(b => b.wholeDay)) return true; // Explicitly blocked by admin
-                return takenTimes.length >= TIME_SLOTS.length; // All slots taken
+                if (blocks.some(b => b.wholeDay)) return true;
+                return takenTimes.length >= TIME_SLOTS.length;
             }, [selDate, blockedSlots, takenTimes]);
 
             const clientApps = useMemo(() => (!user) ? [] : appointments.filter(a => user.isGuest ? a.userPhone === user.phone : a.userId === user.uid).sort((a,b) => parseTime(a.time, a.date) - parseTime(b.time, b.date)), [appointments, user]);
@@ -367,7 +421,11 @@
             const NavItem = ({i:Icon, l, id}) => <button onClick={()=>setView(id)} className={`flex flex-col items-center ${view===id ? 'text-amber-500' : 'text-slate-500'}`}><Icon size={24} strokeWidth={view===id?2.5:2}/><span className="text-[10px] font-bold">{l}</span></button>;
             
             if(loading) return <div className="h-screen bg-slate-900 flex items-center justify-center text-amber-500 font-bold">CARGANDO...</div>;
-            if(!user || !user.displayName) return <AuthScreen onLogin={u => { setUser({...auth.currentUser, ...u}); setView(u.isAdmin ? 'admin' : 'home'); }} deferredPrompt={deferredPrompt} handleInstallClick={handleInstall} />;
+            if(!user || !user.displayName) return <AuthScreen onLogin={u => { 
+                const fullUser = {...auth.currentUser, ...u};
+                setUser(fullUser); 
+                setView(u.isAdmin ? 'admin' : 'home'); 
+            }} deferredPrompt={deferredPrompt} handleInstallClick={handleInstall} />;
 
             // --- NEW: BLOCK SCHEDULE VIEW ---
             const BlockScheduleView = () => {
@@ -375,85 +433,30 @@
                 const [bTimes, setBTimes] = useState([]);
                 const [bAllDay, setBAllDay] = useState(false);
                 
-                // Filter existing blocks to show list
-                const myBlocks = useMemo(() => {
-                    return blockedSlots.sort((a,b) => new Date(a.date) - new Date(b.date));
-                }, [blockedSlots]);
-
-                const toggleTime = (t) => {
-                    if (bTimes.includes(t)) setBTimes(bTimes.filter(x => x !== t));
-                    else setBTimes([...bTimes, t]);
-                };
+                const myBlocks = useMemo(() => blockedSlots.sort((a,b) => new Date(a.date) - new Date(b.date)), [blockedSlots]);
+                const toggleTime = (t) => { if (bTimes.includes(t)) setBTimes(bTimes.filter(x => x !== t)); else setBTimes([...bTimes, t]); };
 
                 const handleSaveBlock = async () => {
-                    if (!bDate) return showToast('Selecciona una fecha', 'error');
-                    if (!bAllDay && bTimes.length === 0) return showToast('Selecciona horas o día completo', 'error');
-
+                    if (!bDate) return showToast('Selecciona fecha', 'error');
+                    if (!bAllDay && bTimes.length === 0) return showToast('Selecciona horas', 'error');
                     try {
-                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'blocked_slots'), {
-                            date: bDate,
-                            times: bAllDay ? [] : bTimes,
-                            wholeDay: bAllDay,
-                            createdAt: new Date().toISOString()
-                        });
-                        showToast('Bloqueo guardado');
-                        setBDate(''); setBTimes([]); setBAllDay(false);
-                    } catch (e) { showToast('Error al guardar', 'error'); }
+                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'blocked_slots'), { date: bDate, times: bAllDay ? [] : bTimes, wholeDay: bAllDay, createdAt: new Date().toISOString() });
+                        showToast('Bloqueo guardado'); setBDate(''); setBTimes([]); setBAllDay(false);
+                    } catch (e) { showToast('Error', 'error'); }
                 };
-
-                const handleDeleteBlock = async (id) => {
-                    if(confirm("¿Eliminar este bloqueo?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'blocked_slots', id));
-                };
+                const handleDeleteBlock = async (id) => { if(confirm("¿Eliminar bloqueo?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'blocked_slots', id)); };
 
                 return (
                     <div className="pb-24 px-4 pt-20 animate-fade-in">
                         <h2 className="text-2xl font-bold mb-6 text-white">Bloquear Horario</h2>
-                        
                         <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 mb-8">
-                            <label className="text-xs text-slate-400 block mb-2">Fecha a bloquear</label>
-                            <input type="date" min={new Date().toISOString().split('T')[0]} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mb-4 text-white" value={bDate} onChange={e => setBDate(e.target.value)} />
-                            
-                            <div className="flex items-center gap-3 mb-4 bg-slate-900/50 p-3 rounded-lg cursor-pointer" onClick={() => setBAllDay(!bAllDay)}>
-                                <div className={`w-5 h-5 rounded border flex items-center justify-center ${bAllDay ? 'bg-amber-500 border-amber-500' : 'border-slate-500'}`}>
-                                    {bAllDay && <CheckCircle size={14} className="text-slate-900" />}
-                                </div>
-                                <span className="text-sm text-white font-bold">Cerrar día completo</span>
-                            </div>
-
-                            {!bAllDay && (
-                                <div className="grid grid-cols-3 gap-2 mb-6">
-                                    {TIME_SLOTS.map(t => (
-                                        <button key={t} onClick={() => toggleTime(t)} className={`py-2 text-[10px] font-bold rounded-lg border ${bTimes.includes(t) ? 'bg-red-500/20 text-red-400 border-red-500' : 'bg-slate-900 text-slate-400 border-slate-700'}`}>
-                                            {t}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-
-                            <button onClick={handleSaveBlock} className="w-full bg-amber-500 text-slate-900 font-bold py-3 rounded-xl flex items-center justify-center gap-2">
-                                <Lock size={18} /> BLOQUEAR
-                            </button>
+                            <label className="text-xs text-slate-400 block mb-2">Fecha</label><input type="date" min={new Date().toISOString().split('T')[0]} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mb-4 text-white" value={bDate} onChange={e => setBDate(e.target.value)} />
+                            <div className="flex items-center gap-3 mb-4 bg-slate-900/50 p-3 rounded-lg cursor-pointer" onClick={() => setBAllDay(!bAllDay)}><div className={`w-5 h-5 rounded border flex items-center justify-center ${bAllDay ? 'bg-amber-500 border-amber-500' : 'border-slate-500'}`}>{bAllDay && <CheckCircle size={14} className="text-slate-900" />}</div><span className="text-sm text-white font-bold">Cerrar día completo</span></div>
+                            {!bAllDay && <div className="grid grid-cols-3 gap-2 mb-6">{TIME_SLOTS.map(t => <button key={t} onClick={() => toggleTime(t)} className={`py-2 text-[10px] font-bold rounded-lg border ${bTimes.includes(t) ? 'bg-red-500/20 text-red-400 border-red-500' : 'bg-slate-900 text-slate-400 border-slate-700'}`}>{t}</button>)}</div>}
+                            <button onClick={handleSaveBlock} className="w-full bg-amber-500 text-slate-900 font-bold py-3 rounded-xl flex items-center justify-center gap-2"><Lock size={18} /> BLOQUEAR</button>
                         </div>
-
                         <h3 className="font-bold mb-4 text-white text-sm">Bloqueos Activos</h3>
-                        <div className="space-y-3">
-                            {myBlocks.map(b => (
-                                <div key={b.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
-                                    <div>
-                                        <div className="flex items-center gap-2 text-amber-500 font-bold">
-                                            <CalendarOff size={16} /> {b.date}
-                                        </div>
-                                        <p className="text-xs text-slate-400 mt-1">
-                                            {b.wholeDay ? 'Día Cerrado' : `${b.times.length} horas bloqueadas`}
-                                        </p>
-                                    </div>
-                                    <button onClick={() => handleDeleteBlock(b.id)} className="p-2 bg-slate-700 rounded-lg text-red-400 hover:bg-slate-600">
-                                        <Trash2 size={18} />
-                                    </button>
-                                </div>
-                            ))}
-                            {myBlocks.length === 0 && <p className="text-slate-500 text-center text-xs italic">No hay bloqueos activos.</p>}
-                        </div>
+                        <div className="space-y-3">{myBlocks.map(b => <div key={b.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center"><div><div className="flex items-center gap-2 text-amber-500 font-bold"><CalendarOff size={16} /> {b.date}</div><p className="text-xs text-slate-400 mt-1">{b.wholeDay ? 'Día Cerrado' : `${b.times.length} horas bloqueadas`}</p></div><button onClick={() => handleDeleteBlock(b.id)} className="p-2 bg-slate-700 rounded-lg text-red-400 hover:bg-slate-600"><Trash2 size={18} /></button></div>)} {myBlocks.length === 0 && <p className="text-slate-500 text-center text-xs italic">No hay bloqueos.</p>}</div>
                     </div>
                 );
             };
@@ -557,7 +560,7 @@
             const renderProfile = () => (
                 <div className="pb-24 px-6 pt-20 animate-fade-in">
                     <div className="bg-slate-800 rounded-2xl p-6 text-center border border-slate-700 mb-6"><div className="w-24 h-24 bg-slate-900 rounded-full mx-auto mb-4 flex items-center justify-center border-2 border-amber-500"><User className="w-10 h-10 text-amber-500"/></div><h2 className="text-2xl font-bold">{user.displayName}</h2><p className="text-sm text-slate-500">{user.email||user.phone}</p>{user.isGuest && <span className="inline-block mt-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">INVITADO</span>}</div>
-                    <button onClick={()=>{setUser(null); setView('home'); setSelService(null);}} className="w-full border border-red-500/30 text-red-400 py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-500/10"><LogOut size={18}/> Cerrar Sesión</button>
+                    <button onClick={handleLogout} className="w-full border border-red-500/30 text-red-400 py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-500/10"><LogOut size={18}/> Cerrar Sesión</button>
                 </div>
             );
 
@@ -607,7 +610,7 @@
                                 <NavItem i={Settings} l="Servicios" id="services"/>
                                 <NavItem i={TrendingUp} l="Ingresos" id="revenue"/>
                                 <NavItem i={Lock} l="Bloqueos" id="blocks"/> {/* NEW Nav Item */}
-                                <button onClick={()=>setUser(null)} className="text-red-400 flex flex-col items-center"><LogOut/><span className="text-[10px] font-bold">Salir</span></button>
+                                <button onClick={handleLogout} className="text-red-400 flex flex-col items-center"><LogOut/><span className="text-[10px] font-bold">Salir</span></button>
                             </div>
                         ) : (
                             <><NavItem i={Home} l="Inicio" id="home"/><NavItem i={Calendar} l="Agendar" id="book"/><NavItem i={Clock} l="Citas" id="appointments"/><NavItem i={User} l="Perfil" id="profile"/></>
