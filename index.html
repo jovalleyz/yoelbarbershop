@@ -54,10 +54,10 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useMemo } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { Scissors, Calendar, User, Home, Bell, Clock, ChevronRight, Star, LogOut, CheckCircle, X, Phone, Trash2, RefreshCw, Shield, DollarSign, AlertCircle, Smartphone, Zap, Search, Filter, Download, Plus, Edit2, Settings, TrendingUp, PieChart, Info, Lock, Unlock, CalendarOff, FileSpreadsheet, Check, Monitor, ArrowLeft } from 'lucide-react';
+        import { Scissors, Calendar, User, Home, Bell, Clock, ChevronRight, Star, LogOut, CheckCircle, X, Phone, Trash2, RefreshCw, Shield, DollarSign, AlertCircle, Smartphone, Zap, Search, Filter, Download, Plus, Edit2, Settings, TrendingUp, PieChart, Info, Lock, Unlock, CalendarOff, FileSpreadsheet, Check, Monitor, ArrowLeft, Save } from 'lucide-react';
         import { initializeApp } from "firebase/app";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
-        import { getFirestore, collection, addDoc, getDocs, query, deleteDoc, updateDoc, doc, onSnapshot, where, writeBatch } from "firebase/firestore";
+        import { getFirestore, collection, addDoc, getDocs, query, deleteDoc, updateDoc, doc, onSnapshot, where, writeBatch, setDoc } from "firebase/firestore";
 
         // --- CONFIGURACIÓN FIREBASE ---
         const firebaseConfig = {
@@ -76,7 +76,10 @@
         const appId = 'barberia-yoel'; 
 
         const ADMIN_EMAIL = "admin@yoel.com";
-        const TIME_SLOTS = ["09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM", "06:00 PM", "07:00 PM"];
+        // Defaults
+        const DEFAULT_START_TIME = "09:00";
+        const DEFAULT_END_TIME = "19:00";
+
         const DEFAULT_SERVICES = [
             { category: 'Corte', title: 'Corte Clásico', price: 500, duration: '45 min', description: 'Corte tradicional con tijera o máquina.', iconName: 'scissors' },
             { category: 'Corte', title: 'Fade / Degradado', price: 700, duration: '60 min', description: 'Degradado moderno con navaja.', iconName: 'scissors' },
@@ -93,6 +96,36 @@
         const formatPhone = p => { if(!p) return 'N/A'; const c=(''+p).replace(/\D/g,''), m=c.match(/^(\d{3})(\d{3})(\d{4})$/); return m ? `(${m[1]}) ${m[2]}-${m[3]}` : p; };
         const cleanPhoneForSearch = v => v ? v.toString().replace(/\D/g, '') : '';
         const normalizeText = t => t ? t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : '';
+        
+        const parseDuration = (durStr) => {
+            if(!durStr) return 60; // Default 1h
+            const num = parseInt(durStr);
+            return isNaN(num) ? 60 : num;
+        };
+
+        // Generate slots dynamically based on interval
+        const generateTimeSlots = (startStr, endStr, intervalMinutes = 60) => {
+            if(!startStr || !endStr) return [];
+            const slots = [];
+            let [startH, startM] = startStr.split(':').map(Number);
+            const [endH, endM] = endStr.split(':').map(Number);
+            
+            let current = new Date();
+            current.setHours(startH, startM, 0, 0);
+            const end = new Date();
+            end.setHours(endH, endM, 0, 0);
+
+            while (current < end) {
+                const hours = current.getHours();
+                const minutes = current.getMinutes();
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                const displayH = hours % 12 || 12;
+                const displayM = minutes < 10 ? '0'+minutes : minutes;
+                slots.push(`${displayH < 10 ? '0'+displayH : displayH}:${displayM} ${ampm}`);
+                current.setMinutes(current.getMinutes() + intervalMinutes);
+            }
+            return slots;
+        };
 
         // --- GLOBAL COMPONENTS ---
         const UsersIcon = ({size, className}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
@@ -178,6 +211,24 @@
             );
         };
 
+        const AdminProfileView = ({ settings, onSaveSettings }) => {
+            const [start, setStart] = useState(settings.start || DEFAULT_START_TIME);
+            const [end, setEnd] = useState(settings.end || DEFAULT_END_TIME);
+            return (
+                <div className="pb-24 px-4 pt-20 animate-fade-in">
+                     <h2 className="text-2xl font-bold mb-6 text-white">Configuración</h2>
+                     <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
+                        <h3 className="font-bold text-white mb-4 flex items-center gap-2"><Clock size={18}/> Horario de Atención</h3>
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                            <div><label className="text-xs text-slate-400 block mb-2">Apertura</label><input type="time" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white" value={start} onChange={e=>setStart(e.target.value)}/></div>
+                            <div><label className="text-xs text-slate-400 block mb-2">Cierre</label><input type="time" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white" value={end} onChange={e=>setEnd(e.target.value)}/></div>
+                        </div>
+                        <button onClick={() => onSaveSettings({start, end})} className="w-full bg-amber-500 text-slate-900 font-bold py-3 rounded-xl flex items-center justify-center gap-2"><Save size={18}/> GUARDAR CAMBIOS</button>
+                     </div>
+                </div>
+            );
+        };
+
         const RevenueView = ({ appointments, downloadCSV }) => {
             const [filter, setFilter] = useState('today');
             const [customStart, setCustomStart] = useState('');
@@ -207,7 +258,7 @@
             );
         };
 
-        const BlockScheduleView = ({ blockedSlots, onSaveBlock, onDeleteBlock }) => { 
+        const BlockScheduleView = ({ blockedSlots, onSaveBlock, onDeleteBlock, timeSlots }) => { 
             const [bDate, setBDate] = useState(''); const [bTimes, setBTimes] = useState([]); const [bAllDay, setBAllDay] = useState(false);
             const myBlocks = useMemo(() => blockedSlots.sort((a,b) => new Date(a.date) - new Date(b.date)), [blockedSlots]);
             const toggleTime = (t) => { if (bTimes.includes(t)) setBTimes(bTimes.filter(x => x !== t)); else setBTimes([...bTimes, t]); };
@@ -219,7 +270,7 @@
                         <label className="text-xs text-slate-400 block mb-2">Fecha a bloquear</label>
                         <div className="relative mb-4"><input type="date" min={new Date().toISOString().split('T')[0]} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white cursor-pointer" value={bDate} onChange={e => setBDate(e.target.value)} /><Calendar className="absolute right-4 top-3 text-amber-500 pointer-events-none" size={20} /></div>
                         <div className="flex items-center gap-3 mb-4 bg-slate-900/50 p-3 rounded-lg cursor-pointer" onClick={() => setBAllDay(!bAllDay)}><div className={`w-5 h-5 rounded border flex items-center justify-center ${bAllDay ? 'bg-amber-500 border-amber-500' : 'border-slate-500'}`}>{bAllDay && <CheckCircle size={14} className="text-slate-900" />}</div><span className="text-sm text-white font-bold">Cerrar día completo</span></div>
-                        {!bAllDay && <div className="grid grid-cols-3 gap-2 mb-6">{TIME_SLOTS.map(t => <button key={t} onClick={() => toggleTime(t)} className={`py-2 text-[10px] font-bold rounded-lg border ${bTimes.includes(t) ? 'bg-red-500/20 text-red-400 border-red-500' : 'bg-slate-900 text-slate-400 border-slate-700'}`}>{t}</button>)}</div>}
+                        {!bAllDay && <div className="grid grid-cols-3 gap-2 mb-6">{timeSlots.map(t => <button key={t} onClick={() => toggleTime(t)} className={`py-2 text-[10px] font-bold rounded-lg border ${bTimes.includes(t) ? 'bg-red-500/20 text-red-400 border-red-500' : 'bg-slate-900 text-slate-400 border-slate-700'}`}>{t}</button>)}</div>}
                         <button onClick={handleSubmit} className="w-full bg-amber-500 text-slate-900 font-bold py-3 rounded-xl flex items-center justify-center gap-2"><Lock size={18} /> BLOQUEAR</button>
                     </div>
                     <h3 className="font-bold mb-4 text-white text-sm">Bloqueos Activos</h3>
@@ -242,8 +293,8 @@
                         const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'appointments'), where('userPhone', '==', cp));
                         const sn = await getDocs(q);
                         if(!sn.empty) onLogin({displayName: sn.docs[0].data().userName||'Invitado', phone: cp, email:'', isAdmin: false, isGuest: true});
-                        else setError('No hay citas.');
-                    } catch { setError('Error de red.'); }
+                        else setError('No se encontraron citas.');
+                    } catch { setError('Error de conexión.'); }
                     setLoading(false); return;
                 }
                 setTimeout(() => {
@@ -265,7 +316,7 @@
                             {mode==='guest' && <div className="relative"><Smartphone size={18} className="absolute left-3 top-3 text-slate-500"/><input type="tel" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-10 outline-none text-white focus:border-amber-500" placeholder="Teléfono (10 dígitos)" value={phone} onChange={e=>setPhone(e.target.value)}/></div>}
                             {mode!=='guest' && <><input className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-amber-500" placeholder="Correo" value={email} onChange={e=>setEmail(e.target.value)}/><input type="password" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-amber-500" placeholder="Contraseña" value={password} onChange={e=>setPassword(e.target.value)}/></>}
                             {error && <div className="text-red-400 text-xs text-center bg-red-500/10 p-2 rounded animate-pulse">{error}</div>}
-                            <button disabled={loading} className="w-full bg-amber-500 text-slate-900 font-bold py-2 rounded-lg shadow-lg shadow-amber-500/20">{loading?'Procesando...': (mode==='guest' && isLookup ? 'BUSCAR CITA' : 'CONTINUAR')}</button>
+                            <button disabled={loading} className="w-full bg-amber-500 text-slate-900 font-bold py-2 rounded-lg">{loading?'...':'CONTINUAR'}</button>
                         </form>
                         {mode==='guest' && <div className="mt-4 text-center"><button onClick={()=>{setLookup(!isLookup); setError('');}} className="text-xs text-amber-500 underline">{isLookup?'Quiero agendar nueva':'¿Ya tienes cita? Buscar'}</button></div>}
                         {mode==='login' && <div className="mt-6 pt-4 border-t border-slate-700 text-center"><button onClick={()=>{setEmail(ADMIN_EMAIL); setPassword('admin123'); setMode('login');}} className="text-xs text-slate-500 flex items-center justify-center gap-1 mx-auto hover:text-amber-500"><Shield size={12}/> Acceso Admin (Demo)</button></div>} 
@@ -319,6 +370,7 @@
             const [selService, setSelService] = useState(null);
             const [selDate, setSelDate] = useState('');
             const [selTime, setSelTime] = useState('');
+            const [bookingDuration, setBookingDuration] = useState(null); 
             const [editId, setEditId] = useState(null);
             const [origBooking, setOrigBooking] = useState(null);
 
@@ -326,6 +378,9 @@
             const [editingService, setEditingService] = useState(null);
             const [manualName, setManualName] = useState(''); 
             const [manualPhone, setManualPhone] = useState('');
+
+            // Settings state
+            const [adminSettings, setAdminSettings] = useState({ start: '09:00', end: '19:00' });
 
             const [deferredPrompt, setDeferredPrompt] = useState(null);
             const [swRegistration, setSwRegistration] = useState(null); 
@@ -336,6 +391,12 @@
             const [isSpinning, setIsSpinning] = useState(false); 
             const [kioskTempUser, setKioskTempUser] = useState(null);
 
+            // Derived Time Slots based on settings (interval fixed to 60 initially, changes per service)
+            const currentTimeSlots = useMemo(() => {
+                const interval = (user?.isAdmin && bookingDuration) ? parseDuration(bookingDuration) : (selService ? parseDuration(selService.duration) : 60);
+                return generateTimeSlots(adminSettings.start, adminSettings.end, interval);
+            }, [adminSettings, selService, bookingDuration, user]);
+
             // Handlers
             const showToast = (msg, type='success') => { setToast({msg, type}); setTimeout(() => setToast(null), 3000); };
             const handleManualRefresh = () => { setIsSpinning(true); setRefreshKey(k => k + 1); showToast('Actualizando...'); setTimeout(() => setIsSpinning(false), 1000); };
@@ -343,24 +404,63 @@
             const handleSaveService = async (data) => { try { if(editingService) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'services', editingService.id), data); else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'services'), data); setShowServiceModal(false); setEditingService(null); } catch(e) { console.error(e); } };
             const handleDeleteService = async (id) => { if(confirm("¿Borrar servicio?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'services', id)); };
             
+            const handleLookupClient = async () => {
+                if (!manualPhone || manualPhone.length < 10) return showToast('Ingrese teléfono válido', 'error');
+                try {
+                    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'appointments'), where('userPhone', '==', cleanPhone(manualPhone)));
+                    const sn = await getDocs(q);
+                    if (!sn.empty) { 
+                        const clientData = sn.docs[0].data();
+                        if(clientData.userName) {
+                            setManualName(clientData.userName);
+                            showToast('Cliente encontrado');
+                        }
+                    } else {
+                        showToast('Cliente no encontrado', 'error');
+                    }
+                } catch (e) { console.error(e); }
+            };
+
+            const handleSaveSettings = async (newSettings) => {
+                try {
+                    // Corrected path: Collection -> Document (ID: config)
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), newSettings);
+                    setAdminSettings(newSettings);
+                    showToast('Horario actualizado');
+                    setView('admin');
+                } catch(e) { console.error(e); showToast('Error al guardar', 'error'); }
+            };
+
             const handleBook = async (tempUserOverride = null) => {
                 if(!selDate || !selTime || !selService) return;
                 try {
                     let u;
-                    if (tempUserOverride) {
-                        u = tempUserOverride;
-                    } else if (user?.isAdmin && !editId && manualName) {
-                        u = { uid: 'admin_manual_' + Date.now(), name: manualName, email: '', phone: manualPhone, isGuest: true };
-                    } else if (user?.isAdmin && origBooking) {
-                        u = { uid: origBooking.userId, name: origBooking.userName, email: origBooking.userEmail, phone: origBooking.userPhone, isGuest: origBooking.isGuestBooking };
-                    } else {
-                        u = { uid: user.uid, name: user.displayName || 'Cliente', email: user.email || '', phone: user.phone || '', isGuest: !!user.isGuest };
-                    }
+                    if (tempUserOverride) u = tempUserOverride;
+                    else if (user?.isAdmin && !editId && manualName) u = { uid: 'admin_manual_' + Date.now(), name: manualName, email: '', phone: manualPhone, isGuest: true };
+                    else if (user?.isAdmin && origBooking) u = { uid: origBooking.userId, name: origBooking.userName, email: origBooking.userEmail, phone: origBooking.userPhone, isGuest: origBooking.isGuestBooking };
+                    else u = { uid: user.uid, name: user.displayName || 'Cliente', email: user.email || '', phone: user.phone || '', isGuest: !!user.isGuest };
+                    
                     const finalName = u.name || u.displayName || 'Cliente'; 
-                    const data = { serviceId: selService.id, serviceTitle: selService.title, price: selService.price, date: selDate, time: selTime, updatedAt: new Date().toISOString(), status: 'confirmada', userId: u.uid, userName: finalName, userEmail: u.email || '', userPhone: cleanPhone(u.phone || ''), isGuestBooking: !!u.isGuest };
+                    const finalDuration = bookingDuration || selService.duration;
+
+                    const data = { 
+                        serviceId: selService.id, 
+                        serviceTitle: selService.title, 
+                        price: selService.price, 
+                        date: selDate, 
+                        time: selTime, 
+                        duration: finalDuration, 
+                        updatedAt: new Date().toISOString(), 
+                        status: 'confirmada', 
+                        userId: u.uid, 
+                        userName: finalName, 
+                        userEmail: u.email || '', 
+                        userPhone: cleanPhone(u.phone || ''), 
+                        isGuestBooking: !!u.isGuest 
+                    };
                     if(editId) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', editId), data); showToast('Cita actualizada'); setView(user?.isAdmin ? 'admin' : 'appointments'); } 
                     else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'appointments'), {...data, createdAt: new Date().toISOString()}); setLastBookedApp(data); setShowSuccessModal(true); }
-                    setEditId(null); setOrigBooking(null); setSelService(null); setSelDate(''); setSelTime(''); setManualName(''); setManualPhone('');
+                    setEditId(null); setOrigBooking(null); setSelService(null); setSelDate(''); setSelTime(''); setManualName(''); setManualPhone(''); setBookingDuration(null);
                 } catch(e) { console.error(e); showToast("Error", 'error'); }
             };
 
@@ -375,16 +475,22 @@
             const startKioskBooking = () => setView('kiosk_auth'); 
             const handleKioskGuestLogin = (g) => { setKioskTempUser({...g, uid: 'kiosk_'+Date.now()}); setView('kiosk_book'); };
 
-            // Effects
             useEffect(() => { const init = async () => { if(!auth.currentUser) await signInAnonymously(auth); }; init(); window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); setDeferredPrompt(e); }); return onAuthStateChanged(auth, firebaseUser => { if (firebaseUser) { const saved = localStorage.getItem('yoel_session'); if (saved) setUser({ ...firebaseUser, ...JSON.parse(saved) }); else setUser(firebaseUser); } else setUser(null); setLoading(false); }); }, []);
             useEffect(() => { if (user && user.displayName && !user.isAnonymous && (user.isAdmin !== undefined || user.isGuest !== undefined)) { const customData = { displayName: user.displayName, email: user.email, phone: user.phone, isAdmin: user.isAdmin, isGuest: user.isGuest }; localStorage.setItem('yoel_session', JSON.stringify(customData)); } }, [user]);
             useEffect(() => { if ('serviceWorker' in navigator) navigator.serviceWorker.ready.then(registration => setSwRegistration(registration)); }, []);
-            useEffect(() => { if(!user) return; const u1 = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'services')), s => { if(s.empty) { const b = writeBatch(db); DEFAULT_SERVICES.forEach(sv => b.set(doc(collection(db, 'artifacts', appId, 'public', 'data', 'services')), sv)); b.commit(); } else setServices(s.docs.map(d=>({id:d.id, ...d.data()}))); }); const u2 = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'appointments')), s => setAppointments(s.docs.map(d=>({id:d.id, ...d.data()})))); const u3 = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'blocked_slots')), s => setBlockedSlots(s.docs.map(d=>({id:d.id, ...d.data()})))); return () => { u1(); u2(); u3(); }; }, [user, refreshKey]); 
+            useEffect(() => { 
+                if(!user) return;
+                const u1 = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'services')), s => { if(s.empty) { const b = writeBatch(db); DEFAULT_SERVICES.forEach(sv => b.set(doc(collection(db, 'artifacts', appId, 'public', 'data', 'services')), sv)); b.commit(); } else setServices(s.docs.map(d=>({id:d.id, ...d.data()}))); });
+                const u2 = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'appointments')), s => setAppointments(s.docs.map(d=>({id:d.id, ...d.data()}))));
+                const u3 = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'blocked_slots')), s => setBlockedSlots(s.docs.map(d=>({id:d.id, ...d.data()}))));
+                // Corrected Listener for Settings Document
+                const u4 = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), s => { if(s.exists()) setAdminSettings(s.data()); });
+                return () => { u1(); u2(); u3(); u4(); };
+            }, [user, refreshKey]); 
             useEffect(() => { if(!user?.isAdmin) return; const interval = setInterval(() => { const now = new Date(); appointments.forEach(a => { if(a.status === 'cancelada') return; const diff = Math.floor((parseTime(a.time, a.date) - now)/60000); if(diff === 15) { const msg = `Cita con ${a.userName} en 15 min.`; setNotifications(p => p.some(x => x.appId === a.id) ? p : [{id: Date.now(), appId: a.id, title: 'Recordatorio', message: msg, read: false, time: 'Ahora'}, ...p]); } }); }, 60000); return () => clearInterval(interval); }, [appointments, user]);
 
-            // Derived Data
-            const takenTimes = useMemo(() => { if (!selDate) return []; const apptTimes = appointments.filter(a => a.date === selDate && a.status !== 'cancelada' && a.id !== editId).map(a => a.time); const blocks = blockedSlots.filter(b => b.date === selDate); const isFullDayBlocked = blocks.some(b => b.wholeDay); const adminBlockedTimes = blocks.flatMap(b => b.times || []); if (isFullDayBlocked) return TIME_SLOTS; return [...new Set([...apptTimes, ...adminBlockedTimes])]; }, [selDate, appointments, editId, blockedSlots]);
-            const isDayFull = useMemo(() => { if (!selDate) return false; const blocks = blockedSlots.filter(b => b.date === selDate); if (blocks.some(b => b.wholeDay)) return true; return takenTimes.length >= TIME_SLOTS.length; }, [selDate, blockedSlots, takenTimes]);
+            const takenTimes = useMemo(() => { if (!selDate) return []; const apptTimes = appointments.filter(a => a.date === selDate && a.status !== 'cancelada' && a.id !== editId).map(a => a.time); const blocks = blockedSlots.filter(b => b.date === selDate); const isFullDayBlocked = blocks.some(b => b.wholeDay); const adminBlockedTimes = blocks.flatMap(b => b.times || []); if (isFullDayBlocked) return currentTimeSlots; return [...new Set([...apptTimes, ...adminBlockedTimes])]; }, [selDate, appointments, editId, blockedSlots, currentTimeSlots]);
+            const isDayFull = useMemo(() => { if (!selDate) return false; const blocks = blockedSlots.filter(b => b.date === selDate); if (blocks.some(b => b.wholeDay)) return true; return takenTimes.length >= currentTimeSlots.length; }, [selDate, blockedSlots, takenTimes, currentTimeSlots]);
             const clientApps = useMemo(() => (!user) ? [] : appointments.filter(a => user.isGuest ? a.userPhone === user.phone : a.userId === user.uid).sort((a,b) => parseTime(a.time, a.date) - parseTime(b.time, b.date)), [appointments, user]);
             const adminApps = useMemo(() => { let res = [...appointments].filter(a => a.status !== 'completed'); if(searchTerm.trim()) { const cs = cleanPhoneForSearch(searchTerm), ts = normalizeText(searchTerm); res = res.filter(a => (cs && cleanPhoneForSearch(a.userPhone).includes(cs)) || normalizeText(a.userName).includes(ts)); } return res.sort((a,b) => parseTime(a.time, a.date) - parseTime(b.time, b.date)); }, [appointments, searchTerm]);
 
@@ -393,35 +499,88 @@
             if(loading) return <div className="h-screen bg-slate-900 flex items-center justify-center text-amber-500 font-bold">CARGANDO...</div>;
             if(!user || !user.displayName) return <AuthScreen onLogin={u => { const fullUser = {...auth.currentUser, ...u}; setUser(fullUser); setView(u.isAdmin ? 'admin' : 'home'); }} deferredPrompt={deferredPrompt} handleInstallClick={handleInstall} />;
 
-            // --- RENDERERS (Now defined INSIDE App scope to access state) ---
             const renderHome = () => ( <div className="pb-24 animate-fade-in"> <div className="relative h-64 bg-slate-800 mb-6 overflow-hidden rounded-b-3xl shadow-xl flex items-end p-6"> <img src="https://i.postimg.cc/FRFN6xdB/wmremove-transformed.png" className="absolute inset-0 w-full h-full object-cover opacity-60" alt="Barber Background" /> <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent z-10"/> <div className="relative z-20"> <h2 className="text-amber-500 font-bold text-xs tracking-widest uppercase mb-1">Professional Barber</h2> <h1 className="text-3xl font-extrabold leading-none">ESTILO<br/>QUE DEFINE.</h1> {user?.isGuest && <div className="mt-2 inline-block bg-amber-500/20 text-amber-500 px-3 py-1 rounded-full text-xs font-bold border border-amber-500/50">MODO INVITADO</div>} </div> </div> <div className="px-6 space-y-4"> <div className="flex gap-4"><button onClick={()=>setView('book')} className="flex-1 bg-amber-500 py-4 rounded-2xl text-slate-900 font-bold shadow-lg flex flex-col items-center gap-1"><Calendar/><span className="text-xs">RESERVAR</span></button><button onClick={()=>setView('appointments')} className="flex-1 bg-slate-800 py-4 rounded-2xl border border-slate-700 flex flex-col items-center gap-1"><Clock/><span className="text-xs">MIS CITAS</span></button></div> <h3 className="font-bold text-lg">Servicios</h3> <div className="space-y-3">{services.map(s => <div key={s.id} className="bg-slate-800 p-4 rounded-xl flex items-center gap-4 border border-slate-700"><div className="text-amber-500 bg-slate-900 p-3 rounded-xl">{getIcon(s.iconName)}</div><div className="flex-1"><h4 className="font-bold">{s.title}</h4><p className="text-xs text-slate-400">RD$ {s.price}</p><p className="text-[10px] text-slate-500 line-clamp-1">{s.description}</p></div><button onClick={()=>{setSelService(s); setView('book');}} className="bg-slate-700 p-2 rounded-lg hover:bg-amber-500 hover:text-slate-900"><ChevronRight/></button></div>)}</div> </div> </div> );
 
-            const renderBooking = (isKioskMode = false) => ( <div className={`animate-fade-in ${!isKioskMode && 'pb-24 px-6 pt-20'} ${isKioskMode && 'h-screen bg-slate-900 p-6 flex flex-col'}`}> {isKioskMode && <button onClick={()=>setView('kiosk')} className="mb-4 text-slate-500"><X size={32}/></button>} <div className="flex justify-between mb-6 items-center"><h2 className="text-2xl font-bold">{editId?'Editar':'Nueva'} Cita</h2>{editId && <button onClick={()=>{setEditId(null); setOrigBooking(null); setSelService(null);}} className="text-xs text-red-400 underline">Cancelar</button>}</div> {user?.isAdmin && !editId && !isKioskMode && (<div className="mb-6 bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-3"><p className="text-xs text-amber-500 font-bold uppercase">Datos del Cliente</p><input className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white" placeholder="Nombre del cliente" value={manualName} onChange={e=>setManualName(e.target.value)} /><input className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white" placeholder="Teléfono (opcional)" value={manualPhone} onChange={e=>setManualPhone(e.target.value)} /></div>)} {!selService ? (<div className="space-y-3 overflow-y-auto flex-1">{services.map(s => (<div key={s.id} onClick={()=>setSelService(s)} className="bg-slate-800 active:bg-slate-700 p-4 rounded-xl border border-slate-700 flex flex-col gap-2 active:scale-95 transition-transform"><div className="flex gap-4 items-center"><div className="text-amber-500 bg-slate-900 p-3 rounded-xl">{getIcon(s.iconName)}</div><div><h3 className="font-bold">{s.title}</h3><p className="text-amber-500 font-bold text-sm">RD$ {s.price}</p></div></div>{s.description && <p className="text-xs text-slate-400 pl-[60px]">{s.description}</p>}</div>))}</div>) : ( <div className="animate-fade-in flex-1 flex flex-col"> <div className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 mb-6"><div className="flex justify-between items-center mb-2"><div><p className="text-xs text-slate-400">Servicio</p><h3 className="font-bold">{selService.title}</h3></div><button onClick={()=>setSelService(null)}><RefreshCw size={14}/></button></div>{selService.description && <div className="bg-slate-900/50 p-3 rounded-lg text-xs text-slate-300 flex gap-2 border border-slate-700/50"><Info size={14} className="text-amber-500 shrink-0 mt-0.5"/> {selService.description}</div>}</div> {isKioskMode ? <div className="mb-6"><p className="text-slate-400 text-sm mb-2">Fecha</p><div className="text-xl font-bold text-white bg-slate-800 p-3 rounded-xl border border-slate-700">HOY ({new Date().toLocaleDateString()})</div></div> : <><label className="block text-sm font-bold mb-2 ml-1 text-slate-300">FECHA</label><div className="relative mb-6"><input type="date" min={new Date().toISOString().split('T')[0]} value={selDate} onChange={e=>setSelDate(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white cursor-pointer" /><Calendar className="absolute right-4 top-4 text-amber-500 pointer-events-none" size={24} /></div></>} {(selDate || isKioskMode) && (isDayFull && !isKioskMode ? <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl flex items-start gap-3 text-red-400 mb-8"><AlertCircle className="min-w-[20px] mt-0.5" /><div><p className="font-bold text-sm">No disponible</p></div></div> : <div className="mb-8"><label className="block text-sm font-bold mb-2 ml-1 text-slate-300">HORA</label><div className="grid grid-cols-3 gap-2">{TIME_SLOTS.map(t => { const dt = isKioskMode ? new Date().toISOString().split('T')[0] : selDate; const disabled = takenTimes.includes(t) || isPastTime(t, dt); return (<button key={t} disabled={disabled} onClick={()=>setSelTime(t)} className={`py-3 rounded-lg text-xs font-bold border ${disabled ? 'bg-slate-800/50 text-slate-600 border-slate-800 line-through opacity-50 cursor-not-allowed' : selTime === t ? 'bg-amber-500 text-slate-900 border-amber-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{t}</button>) })}</div></div>)} <div className="mt-auto"><button disabled={(!selDate && !isKioskMode) || !selTime} onClick={() => { if(isKioskMode) { setSelDate(new Date().toISOString().split('T')[0]); setTimeout(() => handleBook(kioskTempUser), 100); } else handleBook(); }} className="w-full bg-green-500 text-white font-bold py-4 rounded-xl disabled:bg-slate-800 disabled:text-slate-600 shadow-lg">CONFIRMAR</button></div> </div> )} </div> );
-            
-            const renderAdmin = () => ( <div className="pb-24 px-4 pt-20 animate-fade-in"> <div className="flex justify-between items-center mb-6"><div><h2 className="text-2xl font-bold">Panel Admin</h2><p className="text-xs text-slate-400">Bienvenido, Yoel</p></div><div className="flex gap-2"><button onClick={enterKioskMode} className="relative p-2 bg-slate-800 rounded-full border border-slate-700 text-amber-500"><Monitor size={20}/></button><button onClick={()=>setView('notifications')} className="relative p-2 bg-slate-800 rounded-full border border-slate-700"><Bell size={20}/>{notifications.filter(n=>!n.read).length>0&&<span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full"/>}</button></div></div> <div className="relative mb-4"><Search className="absolute left-3 top-3.5 text-slate-500" size={18}/><input className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-white outline-none focus:border-amber-500" placeholder="Buscar..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />{searchTerm && <button onClick={()=>setSearchTerm('')} className="absolute right-3 top-3.5 text-slate-500"><X size={18}/></button>}</div> {searchTerm && <div className="flex justify-between items-center mb-6 text-xs text-slate-400 bg-slate-800/50 p-2 rounded-lg border border-slate-700"><span>Mostrando {adminApps.length}</span><button onClick={()=>setSearchTerm('')} className="text-amber-500 underline">Ver todas</button></div>} <div className="grid grid-cols-2 gap-4 mb-8"><div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><Calendar size={16}/><span className="text-xs font-bold">Citas</span></div><p className="text-2xl font-bold">{adminApps.length}</p></div><div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><DollarSign size={16}/><span className="text-xs font-bold">Ingresos</span></div><p className="text-2xl font-bold text-amber-500">RD$ {adminApps.reduce((a,c)=>a+(c.price||0),0).toLocaleString()}</p></div></div> <h3 className="font-bold mb-4 flex items-center gap-2 text-white"><Clock size={18} className="text-amber-500"/> Agenda <button onClick={handleManualRefresh} className={`ml-2 hover:text-amber-500 transition-colors ${isSpinning ? 'spin-anim text-amber-500' : 'text-slate-500'}`}><RefreshCw size={16} /></button> <button onClick={() => { setView('book'); setManualName(''); setManualPhone(''); }} className="ml-auto bg-amber-500 text-slate-900 p-1 rounded-lg"><Plus size={16} /></button></h3> <div className="space-y-3">{adminApps.map(a => (<div key={a.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 relative"><div className="flex justify-between items-start"><div><h4 className="font-bold text-white">{a.userName} {a.isGuestBooking && <span className="text-[10px] bg-slate-700 px-1 rounded text-slate-300">INVITADO</span>}</h4><p className="text-xs text-slate-400 font-mono mt-0.5 flex gap-1 items-center"><Phone size={10}/> {formatPhone(a.userPhone)}</p><div className="mt-2 text-sm font-medium text-amber-500">{a.serviceTitle}</div></div><div className="text-right"><p className="font-bold text-lg text-white">{a.time}</p><p className="text-xs text-slate-500">{a.date}</p></div></div><div className="mt-3 pt-3 border-t border-slate-700/50 flex justify-end gap-3"><button onClick={(e) => handleComplete(e, a.id)} className="px-3 py-1.5 bg-green-500/10 text-green-400 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-green-500/20"><Check size={12} /> ATENDIDO</button><button onClick={()=>handleStartReschedule(a)} className="px-3 py-1.5 bg-blue-500/10 text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1"><RefreshCw size={12}/> EDITAR</button><button onClick={e=>handleCancel(e, a.id)} className="px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold flex items-center gap-1"><Trash2 size={12}/> BORRAR</button></div></div>))} {adminApps.length===0 && <div className="text-center py-10 opacity-50"><Filter className="mx-auto mb-2"/><p>No hay resultados.</p></div>}</div> </div> );
-            const renderAdminServices = () => ( <div className="pb-24 px-4 pt-20 animate-fade-in"> <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold">Servicios</h2><button onClick={()=>{setEditingService(null); setShowServiceModal(true);}} className="p-2 bg-amber-500 rounded-full text-slate-900"><Plus/></button></div> <div className="space-y-3">{services.map(s => ( <div key={s.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center"> <div className="flex gap-4 items-center"><div className="bg-slate-900 p-3 rounded-xl text-amber-500">{getIcon(s.iconName)}</div><div><h4 className="font-bold text-white">{s.title}</h4><p className="text-slate-400 text-sm">RD$ {s.price}</p></div></div> <div className="flex gap-2"><button onClick={()=>{setEditingService(s); setShowServiceModal(true);}} className="p-2 bg-slate-700 rounded-lg text-blue-400"><Edit2 size={18}/></button><button onClick={()=>handleDeleteService(s.id)} className="p-2 bg-slate-700 rounded-lg text-red-400"><Trash2 size={18}/></button></div> </div> ))}</div> </div> );
-            const renderRevenue = () => <RevenueView appointments={appointments} downloadCSV={downloadCSV} />;
-            const renderBlockSchedule = () => <BlockScheduleView blockedSlots={blockedSlots} onSaveBlock={handleSaveBlock} onDeleteBlock={handleDeleteBlock} />;
+            const renderBooking = (isKioskMode = false) => ( 
+                <div className={`animate-fade-in ${!isKioskMode && 'pb-24 px-6 pt-20'} ${isKioskMode && 'h-screen bg-slate-900 p-6 flex flex-col'}`}> 
+                    {isKioskMode && <button onClick={()=>setView('kiosk')} className="mb-4 text-slate-500"><X size={32}/></button>} 
+                    <div className="flex justify-between mb-6 items-center"><h2 className="text-2xl font-bold">{editId?'Editar':'Nueva'} Cita</h2>{editId && <button onClick={()=>{setEditId(null); setOrigBooking(null); setSelService(null);}} className="text-xs text-red-400 underline">Cancelar</button>}</div> 
+                    {user?.isAdmin && !editId && !isKioskMode && (
+                        <div className="mb-6 bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-3">
+                            <p className="text-xs text-amber-500 font-bold uppercase mb-2">Datos del Cliente</p>
+                            <div className="flex gap-2">
+                                <input className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-white" placeholder="Teléfono" value={manualPhone} onChange={e=>setManualPhone(e.target.value)} />
+                                <button onClick={handleLookupClient} className="bg-slate-700 p-2 rounded-lg text-slate-300"><Search size={18}/></button>
+                            </div>
+                            <input className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white" placeholder="Nombre del cliente" value={manualName} onChange={e=>setManualName(e.target.value)} />
+                            <div className="pt-2 border-t border-slate-700 mt-2">
+                                <p className="text-xs text-slate-400 mb-2">Duración de atención</p>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setBookingDuration('15 min')} className={`flex-1 py-2 rounded-lg text-xs font-bold border ${bookingDuration === '15 min' ? 'bg-amber-500 text-slate-900 border-amber-500' : 'bg-slate-900 text-slate-400 border-slate-700'}`}>15 min</button>
+                                    <button onClick={() => setBookingDuration('30 min')} className={`flex-1 py-2 rounded-lg text-xs font-bold border ${bookingDuration === '30 min' ? 'bg-amber-500 text-slate-900 border-amber-500' : 'bg-slate-900 text-slate-400 border-slate-700'}`}>30 min</button>
+                                    <button onClick={() => setBookingDuration('45 min')} className={`flex-1 py-2 rounded-lg text-xs font-bold border ${bookingDuration === '45 min' ? 'bg-amber-500 text-slate-900 border-amber-500' : 'bg-slate-900 text-slate-400 border-slate-700'}`}>45 min</button>
+                                </div>
+                            </div>
+                        </div>
+                    )} 
+                    {!selService ? (<div className="space-y-3 overflow-y-auto flex-1">{services.map(s => (<div key={s.id} onClick={()=>setSelService(s)} className="bg-slate-800 active:bg-slate-700 p-4 rounded-xl border border-slate-700 flex flex-col gap-2 active:scale-95 transition-transform"><div className="flex gap-4 items-center"><div className="text-amber-500 bg-slate-900 p-3 rounded-xl">{getIcon(s.iconName)}</div><div><h3 className="font-bold">{s.title}</h3><p className="text-amber-500 font-bold text-sm">RD$ {s.price}</p></div></div>{s.description && <p className="text-xs text-slate-400 pl-[60px]">{s.description}</p>}</div>))}</div>) : ( 
+                        <div className="animate-fade-in flex-1 flex flex-col"> 
+                            <div className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 mb-6"><div className="flex justify-between items-center mb-2"><div><p className="text-xs text-slate-400">Servicio</p><h3 className="font-bold">{selService.title}</h3></div><button onClick={()=>setSelService(null)}><RefreshCw size={14}/></button></div>{selService.description && <div className="bg-slate-900/50 p-3 rounded-lg text-xs text-slate-300 flex gap-2 border border-slate-700/50"><Info size={14} className="text-amber-500 shrink-0 mt-0.5"/> {selService.description}</div>}</div> 
+                            {isKioskMode ? <div className="mb-6"><p className="text-slate-400 text-sm mb-2">Fecha</p><div className="text-xl font-bold text-white bg-slate-800 p-3 rounded-xl border border-slate-700">HOY ({new Date().toLocaleDateString()})</div></div> : <><label className="block text-sm font-bold mb-2 ml-1 text-slate-300">FECHA</label><div className="relative mb-6"><input type="date" min={new Date().toISOString().split('T')[0]} value={selDate} onChange={e=>setSelDate(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white cursor-pointer" /><Calendar className="absolute right-4 top-4 text-amber-500 pointer-events-none" size={24} /></div></>} 
+                            {(selDate || isKioskMode) && (isDayFull && !isKioskMode ? <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl flex items-start gap-3 text-red-400 mb-8"><AlertCircle className="min-w-[20px] mt-0.5" /><div><p className="font-bold text-sm">No disponible</p></div></div> : <div className="mb-8"><label className="block text-sm font-bold mb-2 ml-1 text-slate-300">HORA</label><div className="grid grid-cols-3 gap-2">{currentTimeSlots.map(t => { const dt = isKioskMode ? new Date().toISOString().split('T')[0] : selDate; const disabled = takenTimes.includes(t) || isPastTime(t, dt); return (<button key={t} disabled={disabled} onClick={()=>setSelTime(t)} className={`py-3 rounded-lg text-xs font-bold border ${disabled ? 'bg-slate-800/50 text-slate-600 border-slate-800 line-through opacity-50 cursor-not-allowed' : selTime === t ? 'bg-amber-500 text-slate-900 border-amber-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{t}</button>) })}</div></div>)} 
+                            <div className="mt-auto"><button disabled={(!selDate && !isKioskMode) || !selTime} onClick={() => { if(isKioskMode) { setSelDate(new Date().toISOString().split('T')[0]); setTimeout(() => handleBook(kioskTempUser), 100); } else handleBook(); }} className="w-full bg-green-500 text-white font-bold py-4 rounded-xl disabled:bg-slate-800 disabled:text-slate-600 shadow-lg">CONFIRMAR</button></div> 
+                        </div> 
+                    )} 
+                </div> 
+            );
+
             const renderClientAppointments = () => ( <div className="pb-24 px-6 pt-20 animate-fade-in"> <h2 className="text-2xl font-bold mb-6">{view === 'notifications' ? 'Notificaciones' : 'Mis Citas'}</h2> {view === 'notifications' && notifications.map(n => <div key={n.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-blue-500 flex gap-3 mb-3"><Bell className="text-blue-500"/><div><h4 className="font-bold text-sm">{n.title}</h4><p className="text-xs text-slate-400">{n.message}</p></div></div>)} {view === 'appointments' && (clientApps.length === 0 ? <div className="text-center py-20 opacity-50"><Calendar size={64} className="mx-auto mb-4"/><p>No tienes citas.</p><button onClick={()=>setView('book')} className="mt-4 text-amber-500 underline">Agendar</button></div> : <div className="space-y-4">{clientApps.map(a => <div key={a.id} className="bg-slate-800 p-5 rounded-2xl border border-slate-700"><div className="flex justify-between mb-2"><h3 className="font-bold">{a.serviceTitle}</h3><span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs font-bold">{a.status}</span></div><p className="text-amber-500 font-bold mb-2">RD$ {a.price}</p><div className="flex gap-4 text-sm text-slate-400 mb-4"><span>{a.date}</span><span>{a.time}</span></div><div className="flex gap-2"><button onClick={e=>handleCancel(e, a.id)} className="flex-1 py-2 bg-slate-900 rounded-lg text-red-400 text-xs font-bold">CANCELAR</button><button onClick={()=>handleStartReschedule(a)} className="flex-1 py-2 bg-amber-500 rounded-lg text-slate-900 text-xs font-bold">REAGENDAR</button></div></div>)}</div>)} </div> );
             const renderProfile = () => ( <div className="pb-24 px-6 pt-20 animate-fade-in"> <div className="bg-slate-800 rounded-2xl p-6 text-center border border-slate-700 mb-6"><div className="w-24 h-24 bg-slate-900 rounded-full mx-auto mb-4 flex items-center justify-center border-2 border-amber-500"><User className="w-10 h-10 text-amber-500"/></div><h2 className="text-2xl font-bold">{user.displayName}</h2><p className="text-sm text-slate-500">{user.email||user.phone}</p>{user.isGuest && <span className="inline-block mt-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">INVITADO</span>}</div> <button onClick={handleLogout} className="w-full border border-red-500/30 text-red-400 py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-500/10"><LogOut size={18}/> Cerrar Sesión</button> </div> );
 
             const renderContent = () => {
                 if(user?.isAdmin) {
-                    if(view === 'services') return renderAdminServices();
-                    if(view === 'revenue') return renderRevenue();
+                    if(view === 'services') return (
+                        <div className="pb-24 px-4 pt-20 animate-fade-in">
+                            <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold">Servicios</h2><button onClick={()=>{setEditingService(null); setShowServiceModal(true);}} className="p-2 bg-amber-500 rounded-full text-slate-900"><Plus/></button></div>
+                            <div className="space-y-3">{services.map(s => (<div key={s.id} className="bg-slate-800 p-4 rounded-xl flex items-center justify-between border border-slate-700"><div className="flex gap-4 items-center"><div className="bg-slate-900 p-3 rounded-xl text-amber-500">{getIcon(s.iconName)}</div><div><h4 className="font-bold">{s.title}</h4><p className="text-slate-400 text-sm">RD$ {s.price}</p></div></div><div className="flex gap-2"><button onClick={()=>{setEditingService(s); setShowServiceModal(true);}} className="p-2 bg-slate-700 rounded-lg text-blue-400"><Edit2 size={18}/></button><button onClick={()=>handleDeleteService(s.id)} className="p-2 bg-slate-700 rounded-lg text-red-400"><Trash2 size={18}/></button></div></div>))}</div>
+                        </div>
+                    );
+                    if(view === 'revenue') return <RevenueView appointments={appointments} downloadCSV={downloadCSV} />;
                     if(view === 'book') return renderBooking();
-                    if(view === 'notifications') return renderClientAppointments();
-                    if(view === 'blocks') return renderBlockSchedule();
+                    if(view === 'notifications') return (
+                        <div className="pb-24 px-6 pt-20 animate-fade-in">
+                            <h2 className="text-2xl font-bold mb-6">Notificaciones</h2>
+                            {notifications.map(n => <div key={n.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-blue-500 flex gap-3 mb-3"><Bell className="text-blue-500"/><div><h4 className="font-bold text-sm">{n.title}</h4><p className="text-xs text-slate-400">{n.message}</p></div></div>)}
+                        </div>
+                    );
+                    if(view === 'blocks') return <BlockScheduleView blockedSlots={blockedSlots} onSaveBlock={handleSaveBlock} onDeleteBlock={handleDeleteBlock} timeSlots={currentTimeSlots} />;
                     if(view === 'kiosk') return <KioskView appointments={appointments} onExit={()=>setView('admin')} onExpress={startKioskBooking} />;
                     if(view === 'kiosk_auth') return <KioskAuth setView={setView} handleKioskGuestLogin={handleKioskGuestLogin} />;
                     if(view === 'kiosk_book') return renderBooking(true);
-                    return renderAdmin();
+                    if(view === 'profile') return <AdminProfileView settings={adminSettings} onSaveSettings={handleSaveSettings} />;
+
+                    return (
+                        <div className="pb-24 px-4 pt-20 animate-fade-in">
+                            <div className="flex justify-between items-center mb-6"><div><h2 className="text-2xl font-bold">Panel Admin</h2><p className="text-xs text-slate-400">Bienvenido, Yoel</p></div><div className="flex gap-2"><button onClick={enterKioskMode} className="relative p-2 bg-slate-800 rounded-full border border-slate-700 text-amber-500"><Monitor size={20}/></button><button onClick={()=>setView('notifications')} className="relative p-2 bg-slate-800 rounded-full border border-slate-700"><Bell size={20}/>{notifications.filter(n=>!n.read).length>0&&<span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full"/>}</button></div></div>
+                            <div className="relative mb-4"><Search className="absolute left-3 top-3.5 text-slate-500" size={18}/><input className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-white outline-none focus:border-amber-500" placeholder="Buscar..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />{searchTerm && <button onClick={()=>setSearchTerm('')} className="absolute right-3 top-3.5 text-slate-500"><X size={18}/></button>}</div>
+                            {searchTerm && <div className="flex justify-between items-center mb-6 text-xs text-slate-400 bg-slate-800/50 p-2 rounded-lg border border-slate-700"><span>Mostrando {adminApps.length}</span><button onClick={()=>setSearchTerm('')} className="text-amber-500 underline">Ver todas</button></div>}
+                            <div className="grid grid-cols-2 gap-4 mb-8"><div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><Calendar size={16}/><span className="text-xs font-bold">Citas</span></div><p className="text-2xl font-bold">{adminApps.length}</p></div><div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><DollarSign size={16}/><span className="text-xs font-bold">Ingresos</span></div><p className="text-2xl font-bold text-amber-500">RD$ {adminApps.reduce((a,c)=>a+(c.price||0),0).toLocaleString()}</p></div></div>
+                            <h3 className="font-bold mb-4 flex items-center gap-2 text-white"><Clock size={18} className="text-amber-500"/> Agenda <button onClick={handleManualRefresh} className={`ml-2 hover:text-amber-500 ${isSpinning ? 'spin-anim text-amber-500' : 'text-slate-500'}`}><RefreshCw size={16} /></button> <button onClick={() => { setView('book'); setManualName(''); setManualPhone(''); }} className="ml-auto bg-amber-500 text-slate-900 p-1 rounded-lg"><Plus size={16} /></button></h3>
+                            <div className="space-y-3">{adminApps.map(a => (<div key={a.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 relative"><div className="flex justify-between items-start"><div><h4 className="font-bold text-white">{a.userName} {a.isGuestBooking && <span className="text-[10px] bg-slate-700 px-1 rounded text-slate-300">INVITADO</span>}</h4><p className="text-xs text-slate-400 font-mono mt-0.5 flex gap-1 items-center"><Phone size={10}/> {formatPhone(a.userPhone)}</p><div className="mt-2 text-sm font-medium text-amber-500">{a.serviceTitle}</div></div><div className="text-right"><p className="font-bold text-lg text-white">{a.time}</p><p className="text-xs text-slate-500">{a.date}</p></div></div><div className="mt-3 pt-3 border-t border-slate-700/50 flex justify-end gap-3"><button onClick={(e) => handleComplete(e, a.id)} className="px-3 py-1.5 bg-green-500/10 text-green-400 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-green-500/20"><Check size={12} /> ATENDIDO</button><button onClick={()=>handleStartReschedule(a)} className="px-3 py-1.5 bg-blue-500/10 text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1"><RefreshCw size={12}/> EDITAR</button><button onClick={e=>handleCancel(e, a.id)} className="px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold flex items-center gap-1"><Trash2 size={12}/> BORRAR</button></div></div>))} {adminApps.length===0 && <div className="text-center py-10 opacity-50"><Filter className="mx-auto mb-2"/><p>No hay resultados.</p></div>}</div>
+                        </div>
+                    );
                 }
+                
                 if(view === 'home') return renderHome();
                 if(view === 'book') return renderBooking();
-                if(view === 'appointments') return renderClientAppointments();
-                if(view === 'profile') return renderProfile();
-                return renderHome();
+                if(view === 'appointments') return (
+                    <div className="pb-24 px-6 pt-20 animate-fade-in"> <h2 className="text-2xl font-bold mb-6">Mis Citas</h2> {clientApps.length === 0 ? <div className="text-center py-20 opacity-50"><Calendar size={64} className="mx-auto mb-4"/><p>No tienes citas.</p><button onClick={()=>setView('book')} className="mt-4 text-amber-500 underline">Agendar</button></div> : <div className="space-y-4">{clientApps.map(a => <div key={a.id} className="bg-slate-800 p-5 rounded-2xl border border-slate-700"><div className="flex justify-between mb-2"><h3 className="font-bold">{a.serviceTitle}</h3><span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs font-bold">{a.status}</span></div><p className="text-amber-500 font-bold mb-2">RD$ {a.price}</p><div className="flex gap-4 text-sm text-slate-400 mb-4"><span>{a.date}</span><span>{a.time}</span></div><div className="flex gap-2"><button onClick={e=>handleCancel(e, a.id)} className="flex-1 py-2 bg-slate-900 rounded-lg text-red-400 text-xs font-bold">CANCELAR</button><button onClick={()=>handleStartReschedule(a)} className="flex-1 py-2 bg-amber-500 rounded-lg text-slate-900 text-xs font-bold">REAGENDAR</button></div></div>)}</div>} </div>
+                );
+                if(view === 'profile') return (
+                    <div className="pb-24 px-6 pt-20 animate-fade-in"> <div className="bg-slate-800 rounded-2xl p-6 text-center border border-slate-700 mb-6"><div className="w-24 h-24 bg-slate-900 rounded-full mx-auto mb-4 flex items-center justify-center border-2 border-amber-500"><User className="w-10 h-10 text-amber-500"/></div><h2 className="text-2xl font-bold">{user.displayName}</h2><p className="text-sm text-slate-500">{user.email||user.phone}</p>{user.isGuest && <span className="inline-block mt-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">INVITADO</span>}</div> <button onClick={handleLogout} className="w-full border border-red-500/30 text-red-400 py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-500/10"><LogOut size={18}/> Cerrar Sesión</button> </div>
+                );
+                
+                return null;
             };
 
             return (
@@ -435,7 +594,7 @@
                             {user?.isAdmin ? (
                                 <div className="w-full flex justify-around">
                                     <NavItem i={Home} l="Panel" id="admin" activeId={view} onSelect={setView}/>
-                                    <NavItem i={Settings} l="Servicios" id="services" activeId={view} onSelect={setView}/>
+                                    <NavItem i={Settings} l="Config" id="profile" activeId={view} onSelect={setView}/> 
                                     <NavItem i={TrendingUp} l="Ingresos" id="revenue" activeId={view} onSelect={setView}/>
                                     <NavItem i={Lock} l="Bloqueos" id="blocks" activeId={view} onSelect={setView}/> 
                                     <button onClick={handleLogout} className="text-red-400 flex flex-col items-center"><LogOut/><span className="text-[10px] font-bold">Salir</span></button>
@@ -451,7 +610,6 @@
                         if(view === 'kiosk_book') setView('kiosk');
                         else setView('appointments');
                     }} appointmentDetails={lastBookedApp} allAppointments={appointments} isKiosk={view==='kiosk_book'} />
-                    {/* New Update Toast Component Inserted */}
                     <UpdateToast registration={swRegistration} />
                     {toast && <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[200] animate-bounce-in px-4 w-full max-w-sm"><div className={`text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 font-medium ${toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>{toast.type === 'success' ? <CheckCircle size={24}/> : <X size={24}/>} {toast.msg}</div></div>}
                 </div>
