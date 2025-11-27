@@ -54,7 +54,7 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useMemo } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { Scissors, Calendar, User, Home, Bell, Clock, ChevronRight, Star, LogOut, CheckCircle, X, Phone, Trash2, RefreshCw, Shield, DollarSign, AlertCircle, Smartphone, Zap, Search, Filter, Download, Plus, Edit2, Settings, TrendingUp, PieChart, Info, Lock, Unlock, CalendarOff, FileSpreadsheet, Check, Monitor, ArrowLeft, Save } from 'lucide-react';
+        import { Scissors, Calendar, User, Home, Bell, Clock, ChevronRight, Star, LogOut, CheckCircle, X, Phone, Trash2, RefreshCw, Shield, DollarSign, AlertCircle, Smartphone, Zap, Search, Filter, Download, Plus, Edit2, Settings, TrendingUp, PieChart, Info, Lock, Unlock, CalendarOff, FileSpreadsheet, Check, Monitor, ArrowLeft, Save, AlertTriangle } from 'lucide-react';
         import { initializeApp } from "firebase/app";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
         import { getFirestore, collection, addDoc, getDocs, query, deleteDoc, updateDoc, doc, onSnapshot, where, writeBatch, setDoc } from "firebase/firestore";
@@ -88,11 +88,7 @@
 
         // --- UTILS ---
         const parseTime = (t, d) => { if(!t||!d) return new Date(); try { const [year, month, day] = d.split('-').map(Number); const [time, modifier] = t.split(' '); let [hours, minutes] = time.split(':').map(Number); if (hours === 12) hours = 0; if (modifier === 'PM') hours += 12; return new Date(year, month - 1, day, hours, minutes, 0, 0); } catch(e) { return new Date(); } };
-        const isPastTime = (t, d) => {
-             const now = new Date();
-             const slotDate = parseTime(t, d);
-             return slotDate < now;
-        };
+        const isPastTime = (t, d) => parseTime(t, d) < new Date();
         const cleanPhone = p => p ? p.replace(/\D/g, '') : '';
         const formatPhone = p => { if(!p) return 'N/A'; const c=(''+p).replace(/\D/g,''), m=c.match(/^(\d{3})(\d{3})(\d{4})$/); return m ? `(${m[1]}) ${m[2]}-${m[3]}` : p; };
         const cleanPhoneForSearch = v => v ? v.toString().replace(/\D/g, '') : '';
@@ -144,6 +140,26 @@
                     <div className="bg-amber-500/20 p-2 rounded-full"><RefreshCw className="text-amber-500 spin-anim" size={24}/></div>
                     <div className="flex-1"><p className="font-bold text-sm">Nueva versión disponible</p><p className="text-xs text-slate-400">Toca para actualizar.</p></div>
                     <button onClick={updateApp} className="bg-amber-500 text-slate-900 text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap">ACTUALIZAR</button>
+                </div>
+            );
+        };
+
+        // --- NUEVO MODAL DE CONFIRMACIÓN ---
+        const ConfirmModal = ({ show, msg, onConfirm, onCancel }) => {
+            if (!show) return null;
+            return (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/95 backdrop-blur-sm p-4 animate-fade-in">
+                    <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 w-full max-w-sm text-center shadow-2xl relative overflow-hidden">
+                        <div className="mx-auto w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mb-4">
+                            <AlertTriangle className="text-red-500" size={24} />
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-2">¿Estás seguro?</h3>
+                        <p className="text-slate-400 text-sm mb-6">{msg}</p>
+                        <div className="flex gap-3">
+                            <button onClick={onCancel} className="flex-1 py-3 bg-slate-700 rounded-xl text-slate-300 font-bold active:scale-95 transition-transform">Cancelar</button>
+                            <button onClick={onConfirm} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold active:scale-95 transition-transform shadow-lg shadow-red-500/20">Confirmar</button>
+                        </div>
+                    </div>
                 </div>
             );
         };
@@ -302,7 +318,7 @@
                             <button disabled={loading} className="w-full bg-amber-500 text-slate-900 font-bold py-2 rounded-lg">{loading?'...':'CONTINUAR'}</button>
                         </form>
                         {mode==='guest' && <div className="mt-4 text-center"><button onClick={()=>{setLookup(!isLookup); setError('');}} className="text-xs text-amber-500 underline">{isLookup?'Quiero agendar nueva':'¿Ya tienes cita? Buscar'}</button></div>}
-                        {mode==='login' && <div className="mt-6 pt-4 border-t border-slate-700 text-center"><button onClick={()=>{setEmail(ADMIN_EMAIL); setPassword('admin123'); setMode('login');}} className="text-xs text-slate-500 flex items-center justify-center gap-1 mx-auto hover:text-amber-500"><Shield size={12}/> Acceso Admin (Demo)</button></div>} 
+                        {mode==='login' && <div className="mt-6 pt-4 border-t border-slate-700 text-center"><p className="text-xs text-slate-500">OVM Consulting. Todos los derechos reservados 2025</p></div>} 
                     </div>
                     {deferredPrompt && <button onClick={handleInstallClick} className="mt-8 mx-auto flex items-center gap-2 bg-slate-800 text-amber-500 px-6 py-3 rounded-full border border-amber-500/30 shadow-lg"><Download size={20}/> <span className="font-bold text-sm">INSTALAR APP</span></button>}
                 </div>
@@ -372,6 +388,9 @@
             const [notifications, setNotifications] = useState([]);
             const [isSpinning, setIsSpinning] = useState(false); 
             const [kioskTempUser, setKioskTempUser] = useState(null);
+            
+            // NEW STATE FOR CONFIRM MODAL
+            const [confirmData, setConfirmData] = useState({ show: false, msg: '', action: null });
 
             const currentTimeSlots = useMemo(() => {
                 const interval = (user?.isAdmin && bookingDuration) ? parseDuration(bookingDuration) : (selService ? parseDuration(selService.duration) : 60);
@@ -383,7 +402,16 @@
             function handleManualRefresh() { setIsSpinning(true); setRefreshKey(k => k + 1); showToast('Actualizando...'); setTimeout(() => setIsSpinning(false), 1000); };
             async function handleInstall() { if(deferredPrompt) { deferredPrompt.prompt(); if((await deferredPrompt.userChoice).outcome === 'accepted') setDeferredPrompt(null); } };
             async function handleSaveService(data) { try { if(editingService) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'services', editingService.id), data); else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'services'), data); setShowServiceModal(false); setEditingService(null); } catch(e) { console.error(e); } };
-            async function handleDeleteService(id) { if(confirm("¿Borrar servicio?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'services', id)); };
+            
+            // UPDATED HANDLERS USING CUSTOM MODAL
+            function triggerConfirm(msg, action) { setConfirmData({ show: true, msg, action }); }
+
+            async function handleDeleteService(id) { 
+                triggerConfirm("¿Borrar este servicio?", async () => {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'services', id));
+                    showToast('Servicio eliminado');
+                });
+            };
             
             async function handleLookupClient() {
                 if (!manualPhone || manualPhone.length < 10) return showToast('Ingrese teléfono válido', 'error');
@@ -445,12 +473,33 @@
                 } catch(e) { console.error(e); showToast("Error", 'error'); }
             };
 
-            async function handleCancel(e, id) { e.stopPropagation(); if(confirm("¿Cancelar cita?")) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', id)); showToast('Eliminada'); } };
-            async function handleComplete(e, id) { e.stopPropagation(); if(confirm("¿Marcar como atendido?")) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', id), { status: 'completed' }); showToast('Completado'); } };
+            async function handleCancel(e, id) { 
+                e.stopPropagation(); 
+                triggerConfirm("¿Cancelar esta cita?", async () => {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', id)); 
+                    showToast('Cita eliminada'); 
+                });
+            };
+            
+            async function handleComplete(e, id) { 
+                e.stopPropagation(); 
+                triggerConfirm("¿Marcar como atendido?", async () => {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', id), { status: 'completed' }); 
+                    showToast('Servicio completado'); 
+                });
+            };
+
             function handleStartReschedule(app) { setEditId(app.id); setOrigBooking(app); setSelService(services.find(s => s.id === app.serviceId) || services[0]); setSelDate(app.date); setSelTime(app.time); setView('book'); };
             function handleLogout() { localStorage.removeItem('yoel_session'); setUser(null); setView('home'); setSelService(null); }; 
+            
             async function handleSaveBlock(d, ad, t, cb) { if(!d) return showToast('Falta fecha','error'); if(!ad && t.length===0) return showToast('Falta hora','error'); try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'blocked_slots'), { date: d, times: ad?[]:t, wholeDay: ad, createdAt: new Date().toISOString() }); showToast('Guardado'); cb(); } catch{ showToast('Error','error'); } };
-            async function handleDeleteBlock(id) { if(confirm("¿Eliminar?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'blocked_slots', id)); };
+            
+            async function handleDeleteBlock(id) { 
+                triggerConfirm("¿Eliminar bloqueo?", async () => {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'blocked_slots', id)); 
+                    showToast('Bloqueo eliminado');
+                });
+            };
             
             function enterKioskMode() { setView('kiosk'); }
             function startKioskBooking() { setView('kiosk_auth'); }
@@ -465,14 +514,13 @@
                 const u1 = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'services')), s => { if(s.empty) { const b = writeBatch(db); DEFAULT_SERVICES.forEach(sv => b.set(doc(collection(db, 'artifacts', appId, 'public', 'data', 'services')), sv)); b.commit(); } else setServices(s.docs.map(d=>({id:d.id, ...d.data()}))); });
                 const u2 = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'appointments')), s => setAppointments(s.docs.map(d=>({id:d.id, ...d.data()}))));
                 const u3 = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'blocked_slots')), s => setBlockedSlots(s.docs.map(d=>({id:d.id, ...d.data()}))));
-                // Corrected Listener for Settings Document
                 const u4 = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), s => { if(s.exists()) setAdminSettings(s.data()); });
                 return () => { u1(); u2(); u3(); u4(); };
             }, [user, refreshKey]); 
             useEffect(() => { if(!user?.isAdmin) return; const interval = setInterval(() => { const now = new Date(); appointments.forEach(a => { if(a.status === 'cancelada') return; const diff = Math.floor((parseTime(a.time, a.date) - now)/60000); if(diff === 15) { const msg = `Cita con ${a.userName} en 15 min.`; setNotifications(p => p.some(x => x.appId === a.id) ? p : [{id: Date.now(), appId: a.id, title: 'Recordatorio', message: msg, read: false, time: 'Ahora'}, ...p]); } }); }, 60000); return () => clearInterval(interval); }, [appointments, user]);
 
-            // Derived Data (Active/Past split logic here)
-            const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+            // Derived Data
+            const todayStr = new Date().toLocaleDateString('en-CA'); 
             
             const takenTimes = useMemo(() => { if (!selDate) return []; const apptTimes = appointments.filter(a => a.date === selDate && a.status !== 'cancelada' && a.id !== editId).map(a => a.time); const blocks = blockedSlots.filter(b => b.date === selDate); const isFullDayBlocked = blocks.some(b => b.wholeDay); const adminBlockedTimes = blocks.flatMap(b => b.times || []); if (isFullDayBlocked) return currentTimeSlots; return [...new Set([...apptTimes, ...adminBlockedTimes])]; }, [selDate, appointments, editId, blockedSlots, currentTimeSlots]);
             const isDayFull = useMemo(() => { if (!selDate) return false; const blocks = blockedSlots.filter(b => b.date === selDate); if (blocks.some(b => b.wholeDay)) return true; return takenTimes.length >= currentTimeSlots.length; }, [selDate, blockedSlots, takenTimes, currentTimeSlots]);
@@ -487,15 +535,15 @@
                 return res.sort((a,b) => parseTime(a.time, a.date) - parseTime(b.time, b.date)); 
             }, [appointments, searchTerm]);
 
-            const downloadCSV = (data) => { if (!data.length) return showToast('No hay datos', 'error'); const headers = ["Fecha", "Hora", "Cliente", "Teléfono", "Servicio", "Precio", "Estado", "Tipo"]; const rows = data.map(a => [a.date, a.time, `"${a.userName}"`, a.userPhone, `"${a.serviceTitle}"`, a.price, a.status, a.isGuestBooking ? 'Invitado' : 'Registrado']); const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n"); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `reporte_barberia_yoel_${new Date().toISOString().split('T')[0]}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
+            const downloadCSV = (data) => { if (!data.length) return showToast('No hay datos', 'error'); const headers = ["Fecha", "Hora", "Cliente", "Teléfono", "Servicio", "Precio", "Estado", "Tipo"]; const rows = data.map(a => [a.date, a.time, `"${a.userName}"`, a.userPhone, `"${a.serviceTitle}"`, a.price, a.status, a.isGuestBooking ? 'Invitado' : 'Registrado']); rows.push([]); rows.push(['', '', '', '', 'TOTAL VENTAS', data.reduce((a,c)=>a+(c.price||0),0), '', '']); const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n"); const blob = new Blob(["\uFEFF"+csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `reporte_barberia_yoel_${new Date().toISOString().split('T')[0]}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
             
             if(loading) return <div className="h-screen bg-slate-900 flex items-center justify-center text-amber-500 font-bold">CARGANDO...</div>;
             if(!user || !user.displayName) return <AuthScreen onLogin={u => { const fullUser = {...auth.currentUser, ...u}; setUser(fullUser); setView(u.isAdmin ? 'admin' : 'home'); }} deferredPrompt={deferredPrompt} handleInstallClick={handleInstall} />;
 
-            // --- RENDERERS DEFINIDOS DENTRO DE APP PARA ACCEDER AL ESTADO ---
-            function renderHome() { return ( <div className="pb-24 animate-fade-in"> <div className="relative h-64 bg-slate-800 mb-6 overflow-hidden rounded-b-3xl shadow-xl flex items-end p-6"> <img src="https://i.postimg.cc/FRFN6xdB/wmremove-transformed.png" className="absolute inset-0 w-full h-full object-cover opacity-60" alt="Barber Background" /> <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent z-10"/> <div className="relative z-20"> <h2 className="text-amber-500 font-bold text-xs tracking-widest uppercase mb-1">Professional Barber</h2> <h1 className="text-3xl font-extrabold leading-none">ESTILO<br/>QUE DEFINE.</h1> {user?.isGuest && <div className="mt-2 inline-block bg-amber-500/20 text-amber-500 px-3 py-1 rounded-full text-xs font-bold border border-amber-500/50">MODO INVITADO</div>} </div> </div> <div className="px-6 space-y-4"> <div className="flex gap-4"><button onClick={()=>setView('book')} className="flex-1 bg-amber-500 py-4 rounded-2xl text-slate-900 font-bold shadow-lg flex flex-col items-center gap-1"><Calendar/><span className="text-xs">RESERVAR</span></button><button onClick={()=>setView('appointments')} className="flex-1 bg-slate-800 py-4 rounded-2xl border border-slate-700 flex flex-col items-center gap-1"><Clock/><span className="text-xs">MIS CITAS</span></button></div> <h3 className="font-bold text-lg">Servicios</h3> <div className="space-y-3">{services.map(s => <div key={s.id} className="bg-slate-800 p-4 rounded-xl flex items-center gap-4 border border-slate-700"><div className="text-amber-500 bg-slate-900 p-3 rounded-xl">{getIcon(s.iconName)}</div><div className="flex-1"><h4 className="font-bold">{s.title}</h4><p className="text-xs text-slate-400">RD$ {s.price}</p><p className="text-[10px] text-slate-500 line-clamp-1">{s.description}</p></div><button onClick={()=>{setSelService(s); setView('book');}} className="bg-slate-700 p-2 rounded-lg hover:bg-amber-500 hover:text-slate-900"><ChevronRight/></button></div>)}</div> </div> </div> ); }
+            // RENDERERS
+            const renderHome = () => ( <div className="pb-24 animate-fade-in"> <div className="relative h-64 bg-slate-800 mb-6 overflow-hidden rounded-b-3xl shadow-xl flex items-end p-6"> <img src="https://i.postimg.cc/FRFN6xdB/wmremove-transformed.png" className="absolute inset-0 w-full h-full object-cover opacity-60" alt="Barber Background" /> <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent z-10"/> <div className="relative z-20"> <h2 className="text-amber-500 font-bold text-xs tracking-widest uppercase mb-1">Professional Barber</h2> <h1 className="text-3xl font-extrabold leading-none">ESTILO<br/>QUE DEFINE.</h1> {user?.isGuest && <div className="mt-2 inline-block bg-amber-500/20 text-amber-500 px-3 py-1 rounded-full text-xs font-bold border border-amber-500/50">MODO INVITADO</div>} </div> </div> <div className="px-6 space-y-4"> <div className="flex gap-4"><button onClick={()=>setView('book')} className="flex-1 bg-amber-500 py-4 rounded-2xl text-slate-900 font-bold shadow-lg flex flex-col items-center gap-1"><Calendar/><span className="text-xs">RESERVAR</span></button><button onClick={()=>setView('appointments')} className="flex-1 bg-slate-800 py-4 rounded-2xl border border-slate-700 flex flex-col items-center gap-1"><Clock/><span className="text-xs">MIS CITAS</span></button></div> <h3 className="font-bold text-lg">Servicios</h3> <div className="space-y-3">{services.map(s => <div key={s.id} className="bg-slate-800 p-4 rounded-xl flex items-center gap-4 border border-slate-700"><div className="text-amber-500 bg-slate-900 p-3 rounded-xl">{getIcon(s.iconName)}</div><div className="flex-1"><h4 className="font-bold">{s.title}</h4><p className="text-xs text-slate-400">RD$ {s.price}</p><p className="text-[10px] text-slate-500 line-clamp-1">{s.description}</p></div><button onClick={()=>{setSelService(s); setView('book');}} className="bg-slate-700 p-2 rounded-lg hover:bg-amber-500 hover:text-slate-900"><ChevronRight/></button></div>)}</div> </div> </div> );
 
-            function renderBooking(isKioskMode = false) { return ( 
+            const renderBooking = (isKioskMode = false) => ( 
                 <div className={`animate-fade-in ${!isKioskMode && 'pb-24 px-6 pt-20'} ${isKioskMode && 'h-screen bg-slate-900 p-6 flex flex-col'}`}> 
                     {isKioskMode && <button onClick={()=>setView('kiosk')} className="mb-4 text-slate-500"><X size={32}/></button>} 
                     <div className="flex justify-between mb-6 items-center"><h2 className="text-2xl font-bold">{editId?'Editar':'Nueva'} Cita</h2>{editId && <button onClick={()=>{setEditId(null); setOrigBooking(null); setSelService(null);}} className="text-xs text-red-400 underline">Cancelar</button>}</div> 
@@ -526,59 +574,60 @@
                         </div> 
                     )} 
                 </div> 
-            ); }
+            );
 
-            function renderClientAppointments() { return ( <div className="pb-24 px-6 pt-20 animate-fade-in"> <h2 className="text-2xl font-bold mb-6">{view === 'notifications' ? 'Notificaciones' : 'Mis Citas'}</h2> {view === 'notifications' && notifications.map(n => <div key={n.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-blue-500 flex gap-3 mb-3"><Bell className="text-blue-500"/><div><h4 className="font-bold text-sm">{n.title}</h4><p className="text-xs text-slate-400">{n.message}</p></div></div>)} {view === 'appointments' && (clientApps.length === 0 ? <div className="text-center py-20 opacity-50"><Calendar size={64} className="mx-auto mb-4"/><p>No tienes citas.</p><button onClick={()=>setView('book')} className="mt-4 text-amber-500 underline">Agendar</button></div> : <div className="space-y-4">{clientApps.map(a => <div key={a.id} className="bg-slate-800 p-5 rounded-2xl border border-slate-700"><div className="flex justify-between mb-2"><h3 className="font-bold">{a.serviceTitle}</h3><span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs font-bold">{a.status}</span></div><p className="text-amber-500 font-bold mb-2">RD$ {a.price}</p><div className="flex gap-4 text-sm text-slate-400 mb-4"><span>{a.date}</span><span>{a.time}</span></div><div className="flex gap-2"><button onClick={e=>handleCancel(e, a.id)} className="flex-1 py-2 bg-slate-900 rounded-lg text-red-400 text-xs font-bold">CANCELAR</button><button onClick={()=>handleStartReschedule(a)} className="flex-1 py-2 bg-amber-500 rounded-lg text-slate-900 text-xs font-bold">REAGENDAR</button></div></div>)}</div>)} </div> ); }
-            function renderProfile() { return ( <div className="pb-24 px-6 pt-20 animate-fade-in"> <div className="bg-slate-800 rounded-2xl p-6 text-center border border-slate-700 mb-6"><div className="w-24 h-24 bg-slate-900 rounded-full mx-auto mb-4 flex items-center justify-center border-2 border-amber-500"><User className="w-10 h-10 text-amber-500"/></div><h2 className="text-2xl font-bold">{user.displayName}</h2><p className="text-sm text-slate-500">{user.email||user.phone}</p>{user.isGuest && <span className="inline-block mt-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">INVITADO</span>}</div> <button onClick={handleLogout} className="w-full border border-red-500/30 text-red-400 py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-500/10"><LogOut size={18}/> Cerrar Sesión</button> </div> ); }
-
-            function renderAdmin() {
-                const filteredCount = adminApps.length;
-                const revenue = adminApps.reduce((acc, c) => acc + (c.price||0), 0);
-                const activeList = adminApps.filter(a => a.date >= todayStr);
-                const pastList = adminApps.filter(a => a.date < todayStr);
-
-                return (
-                    <div className="pb-24 px-4 pt-20 animate-fade-in">
-                        <div className="flex justify-between items-center mb-6"><div><h2 className="text-2xl font-bold">Panel Admin</h2><p className="text-xs text-slate-400">Bienvenido, Yoel</p></div><div className="flex gap-2"><button onClick={enterKioskMode} className="relative p-2 bg-slate-800 rounded-full border border-slate-700 text-amber-500"><Monitor size={20}/></button><button onClick={()=>setView('notifications')} className="relative p-2 bg-slate-800 rounded-full border border-slate-700"><Bell size={20}/>{notifications.filter(n=>!n.read).length>0&&<span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full"/>}</button></div></div>
-                        <div className="relative mb-4"><Search className="absolute left-3 top-3.5 text-slate-500" size={18}/><input className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-white outline-none focus:border-amber-500" placeholder="Buscar..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />{searchTerm && <button onClick={()=>setSearchTerm('')} className="absolute right-3 top-3.5 text-slate-500"><X size={18}/></button>}</div>
-                        {searchTerm && <div className="flex justify-between items-center mb-6 text-xs text-slate-400 bg-slate-800/50 p-2 rounded-lg border border-slate-700"><span>Mostrando {adminApps.length}</span><button onClick={()=>setSearchTerm('')} className="text-amber-500 underline">Ver todas</button></div>}
-                        
-                        <div className="grid grid-cols-2 gap-4 mb-8"><div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><Calendar size={16}/><span className="text-xs font-bold">Citas</span></div><p className="text-2xl font-bold">{adminApps.length}</p></div><div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><DollarSign size={16}/><span className="text-xs font-bold">Ingresos</span></div><p className="text-2xl font-bold text-amber-500">RD$ {adminApps.reduce((a,c)=>a+(c.price||0),0).toLocaleString()}</p></div></div>
-                        
-                        <h3 className="font-bold mb-4 flex items-center gap-2 text-white"><Clock size={18} className="text-amber-500"/> Agenda <button onClick={handleManualRefresh} className={`ml-2 hover:text-amber-500 ${isSpinning ? 'spin-anim text-amber-500' : 'text-slate-500'}`}><RefreshCw size={16} /></button> <button onClick={() => { setView('book'); setManualName(''); setManualPhone(''); }} className="ml-auto bg-amber-500 text-slate-900 p-1 rounded-lg"><Plus size={16} /></button></h3>
-                        
-                        {/* Active List */}
-                        <div className="space-y-3">{activeList.map(a => (<div key={a.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 relative"><div className="flex justify-between items-start"><div><h4 className="font-bold text-white">{a.userName} {a.isGuestBooking && <span className="text-[10px] bg-slate-700 px-1 rounded text-slate-300">INVITADO</span>}</h4><p className="text-xs text-slate-400 font-mono mt-0.5 flex gap-1 items-center"><Phone size={10}/> {formatPhone(a.userPhone)}</p><div className="mt-2 text-sm font-medium text-amber-500">{a.serviceTitle}</div></div><div className="text-right"><p className="font-bold text-lg text-white">{a.time}</p><p className="text-xs text-slate-500">{a.date}</p></div></div><div className="mt-3 pt-3 border-t border-slate-700/50 flex justify-end gap-3"><button onClick={(e) => handleComplete(e, a.id)} className="px-3 py-1.5 bg-green-500/10 text-green-400 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-green-500/20"><Check size={12} /> ATENDIDO</button><button onClick={()=>handleStartReschedule(a)} className="px-3 py-1.5 bg-blue-500/10 text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1"><RefreshCw size={12}/> EDITAR</button><button onClick={e=>handleCancel(e, a.id)} className="px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold flex items-center gap-1"><Trash2 size={12}/> BORRAR</button></div></div>))} {activeList.length===0 && <div className="text-center py-10 opacity-50"><Filter className="mx-auto mb-2"/><p>No hay resultados activos.</p></div>}</div>
-
-                        {/* Past List */}
-                        {pastList.length > 0 && (
-                            <div className="mt-8 pt-6 border-t border-slate-700/50">
-                                <h3 className="font-bold mb-4 text-slate-500 text-xs uppercase tracking-widest">Citas Pasadas (Pendientes)</h3>
-                                <div className="space-y-3 opacity-60 hover:opacity-100 transition-opacity">
-                                    {pastList.map(a => (
-                                        <div key={a.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 relative">
-                                            <div className="flex justify-between items-start">
-                                                <div><h4 className="font-bold text-white">{a.userName} <span className="text-xs text-amber-500">({a.date})</span></h4><p className="text-xs text-slate-400">{a.time} - {a.serviceTitle}</p></div>
-                                                <div className="flex gap-2">
-                                                    <button onClick={(e) => handleComplete(e, a.id)} className="p-2 bg-green-500/10 text-green-400 rounded-lg"><Check size={16} /></button>
-                                                    <button onClick={e=>handleCancel(e, a.id)} className="p-2 bg-red-500/10 text-red-400 rounded-lg"><Trash2 size={16} /></button>
-                                                </div>
-                                            </div>
+            const renderClientAppointments = () => ( 
+                <div className="pb-24 px-6 pt-20 animate-fade-in"> 
+                    <h2 className="text-2xl font-bold mb-6">Mis Citas</h2> 
+                    {clientApps.length === 0 ? 
+                        <div className="text-center py-20 opacity-50"><Calendar size={64} className="mx-auto mb-4"/><p>No tienes citas.</p><button onClick={()=>setView('book')} className="mt-4 text-amber-500 underline">Agendar</button></div> 
+                        : 
+                        <div className="space-y-4">
+                            {clientApps.map(a => {
+                                const isCompleted = a.status === 'completed';
+                                return (
+                                    <div key={a.id} className={`bg-slate-800 p-5 rounded-2xl border border-slate-700 ${isCompleted ? 'opacity-75' : ''}`}>
+                                        <div className="flex justify-between mb-2">
+                                            <h3 className="font-bold">{a.serviceTitle}</h3>
+                                            <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${isCompleted ? 'bg-gray-600 text-white' : 'bg-green-500/20 text-green-400'}`}>{isCompleted ? 'ATENDIDO' : a.status}</span>
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                );
-            };
-            
-            // --- RENDER ADMIN SERVICES (Missing) ---
-            const renderAdminServices = () => ( <div className="pb-24 px-4 pt-20 animate-fade-in"> <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold">Servicios</h2><button onClick={()=>{setEditingService(null); setShowServiceModal(true);}} className="p-2 bg-amber-500 rounded-full text-slate-900"><Plus/></button></div> <div className="space-y-3">{services.map(s => ( <div key={s.id} className="bg-slate-800 p-4 rounded-xl flex items-center justify-between border border-slate-700"> <div className="flex gap-4 items-center"><div className="bg-slate-900 p-3 rounded-xl text-amber-500">{getIcon(s.iconName)}</div><div><h4 className="font-bold">{s.title}</h4><p className="text-slate-400 text-sm">RD$ {s.price}</p></div></div> <div className="flex gap-2"><button onClick={()=>{setEditingService(s); setShowServiceModal(true);}} className="p-2 bg-slate-700 rounded-lg text-blue-400"><Edit2 size={18}/></button><button onClick={()=>handleDeleteService(s.id)} className="p-2 bg-slate-700 rounded-lg text-red-400"><Trash2 size={18}/></button></div> </div> ))}</div> </div> );
+                                        <p className="text-amber-500 font-bold mb-2">RD$ {a.price}</p>
+                                        <div className="flex gap-4 text-sm text-slate-400 mb-4"><span>{a.date}</span><span>{a.time}</span></div>
+                                        
+                                        {isCompleted ? (
+                                            <button onClick={()=>{
+                                                setSelService(services.find(s => s.id === a.serviceId) || services[0]);
+                                                setEditId(null); // New booking
+                                                setOrigBooking(null);
+                                                setSelDate(''); 
+                                                setSelTime('');
+                                                setView('book');
+                                            }} className="w-full py-3 bg-amber-500 rounded-lg text-slate-900 font-bold text-sm flex items-center justify-center gap-2">
+                                                <RefreshCw size={16}/> ¿VOLVER A AGENDAR?
+                                            </button>
+                                        ) : (
+                                            <div className="flex gap-2">
+                                                <button onClick={e=>handleCancel(e, a.id)} className="flex-1 py-2 bg-slate-900 rounded-lg text-red-400 text-xs font-bold border border-red-900">CANCELAR</button>
+                                                <button onClick={()=>handleStartReschedule(a)} className="flex-1 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-bold">REAGENDAR</button>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    } 
+                </div> 
+            );
+            const renderProfile = () => ( <div className="pb-24 px-6 pt-20 animate-fade-in"> <div className="bg-slate-800 rounded-2xl p-6 text-center border border-slate-700 mb-6"><div className="w-24 h-24 bg-slate-900 rounded-full mx-auto mb-4 flex items-center justify-center border-2 border-amber-500"><User className="w-10 h-10 text-amber-500"/></div><h2 className="text-2xl font-bold">{user.displayName}</h2><p className="text-sm text-slate-500">{user.email||user.phone}</p>{user.isGuest && <span className="inline-block mt-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">INVITADO</span>}</div> <button onClick={handleLogout} className="w-full border border-red-500/30 text-red-400 py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-500/10"><LogOut size={18}/> Cerrar Sesión</button> </div> );
 
             const renderContent = () => {
                 if(user?.isAdmin) {
-                    if(view === 'services') return renderAdminServices();
+                    if(view === 'services') return (
+                        <div className="pb-24 px-4 pt-20 animate-fade-in">
+                            <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold">Servicios</h2><button onClick={()=>{setEditingService(null); setShowServiceModal(true);}} className="p-2 bg-amber-500 rounded-full text-slate-900"><Plus/></button></div>
+                            <div className="space-y-3">{services.map(s => (<div key={s.id} className="bg-slate-800 p-4 rounded-xl flex items-center justify-between border border-slate-700"><div className="flex gap-4 items-center"><div className="bg-slate-900 p-3 rounded-xl text-amber-500">{getIcon(s.iconName)}</div><div><h4 className="font-bold">{s.title}</h4><p className="text-slate-400 text-sm">RD$ {s.price}</p></div></div><div className="flex gap-2"><button onClick={()=>{setEditingService(s); setShowServiceModal(true);}} className="p-2 bg-slate-700 rounded-lg text-blue-400"><Edit2 size={18}/></button><button onClick={()=>handleDeleteService(s.id)} className="p-2 bg-slate-700 rounded-lg text-red-400"><Trash2 size={18}/></button></div></div>))}</div>
+                        </div>
+                    );
                     if(view === 'revenue') return <RevenueView appointments={appointments} downloadCSV={downloadCSV} />;
                     if(view === 'book') return renderBooking();
                     if(view === 'notifications') return (
@@ -592,8 +641,40 @@
                     if(view === 'kiosk_auth') return <KioskAuth setView={setView} handleKioskGuestLogin={handleKioskGuestLogin} />;
                     if(view === 'kiosk_book') return renderBooking(true);
                     if(view === 'profile') return <AdminProfileView settings={adminSettings} onSaveSettings={handleSaveSettings} />;
-                    return renderAdmin();
+
+                    const activeList = adminApps.filter(a => a.date >= todayStr);
+                    const pastList = adminApps.filter(a => a.date < todayStr);
+
+                    return (
+                        <div className="pb-24 px-4 pt-20 animate-fade-in">
+                            <div className="flex justify-between items-center mb-6"><div><h2 className="text-2xl font-bold">Panel Admin</h2><p className="text-xs text-slate-400">Bienvenido, Yoel</p></div><div className="flex gap-2"><button onClick={enterKioskMode} className="relative p-2 bg-slate-800 rounded-full border border-slate-700 text-amber-500"><Monitor size={20}/></button><button onClick={()=>setView('notifications')} className="relative p-2 bg-slate-800 rounded-full border border-slate-700"><Bell size={20}/>{notifications.filter(n=>!n.read).length>0&&<span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full"/>}</button></div></div>
+                            <div className="relative mb-4"><Search className="absolute left-3 top-3.5 text-slate-500" size={18}/><input className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-white outline-none focus:border-amber-500" placeholder="Buscar..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />{searchTerm && <button onClick={()=>setSearchTerm('')} className="absolute right-3 top-3.5 text-slate-500"><X size={18}/></button>}</div>
+                            {searchTerm && <div className="flex justify-between items-center mb-6 text-xs text-slate-400 bg-slate-800/50 p-2 rounded-lg border border-slate-700"><span>Mostrando {adminApps.length}</span><button onClick={()=>setSearchTerm('')} className="text-amber-500 underline">Ver todas</button></div>}
+                            <div className="grid grid-cols-2 gap-4 mb-8"><div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><Calendar size={16}/><span className="text-xs font-bold">Citas</span></div><p className="text-2xl font-bold">{adminApps.length}</p></div><div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><DollarSign size={16}/><span className="text-xs font-bold">Ingresos</span></div><p className="text-2xl font-bold text-amber-500">RD$ {adminApps.reduce((a,c)=>a+(c.price||0),0).toLocaleString()}</p></div></div>
+                            <h3 className="font-bold mb-4 flex items-center gap-2 text-white"><Clock size={18} className="text-amber-500"/> Agenda <button onClick={handleManualRefresh} className={`ml-2 hover:text-amber-500 ${isSpinning ? 'spin-anim text-amber-500' : 'text-slate-500'}`}><RefreshCw size={16} /></button> <button onClick={() => { setView('book'); setManualName(''); setManualPhone(''); }} className="ml-auto bg-amber-500 text-slate-900 p-1 rounded-lg"><Plus size={16} /></button></h3>
+                            <div className="space-y-3">{activeList.map(a => (<div key={a.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 relative"><div className="flex justify-between items-start"><div><h4 className="font-bold text-white">{a.userName} {a.isGuestBooking && <span className="text-[10px] bg-slate-700 px-1 rounded text-slate-300">INVITADO</span>}</h4><p className="text-xs text-slate-400 font-mono mt-0.5 flex gap-1 items-center"><Phone size={10}/> {formatPhone(a.userPhone)}</p><div className="mt-2 text-sm font-medium text-amber-500">{a.serviceTitle}</div></div><div className="text-right"><p className="font-bold text-lg text-white">{a.time}</p><p className="text-xs text-slate-500">{a.date}</p></div></div><div className="mt-3 pt-3 border-t border-slate-700/50 flex justify-end gap-3"><button onClick={(e) => handleComplete(e, a.id)} className="px-3 py-1.5 bg-green-500/10 text-green-400 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-green-500/20"><Check size={12} /> ATENDIDO</button><button onClick={()=>handleStartReschedule(a)} className="px-3 py-1.5 bg-blue-500/10 text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1"><RefreshCw size={12}/> EDITAR</button><button onClick={e=>handleCancel(e, a.id)} className="px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold flex items-center gap-1"><Trash2 size={12}/> BORRAR</button></div></div>))} {activeList.length===0 && <div className="text-center py-10 opacity-50"><Filter className="mx-auto mb-2"/><p>No hay resultados activos.</p></div>}</div>
+                            {pastList.length > 0 && (
+                                <div className="mt-8 pt-6 border-t border-slate-700/50">
+                                    <h3 className="font-bold mb-4 text-slate-500 text-xs uppercase tracking-widest">Citas Pasadas (Pendientes)</h3>
+                                    <div className="space-y-3 opacity-60 hover:opacity-100 transition-opacity">
+                                        {pastList.map(a => (
+                                            <div key={a.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 relative">
+                                                <div className="flex justify-between items-start">
+                                                    <div><h4 className="font-bold text-white">{a.userName} <span className="text-xs text-amber-500">({a.date})</span></h4><p className="text-xs text-slate-400">{a.time} - {a.serviceTitle}</p></div>
+                                                    <div className="flex gap-2">
+                                                        <button onClick={(e) => handleComplete(e, a.id)} className="p-2 bg-green-500/10 text-green-400 rounded-lg"><Check size={16} /></button>
+                                                        <button onClick={e=>handleCancel(e, a.id)} className="p-2 bg-red-500/10 text-red-400 rounded-lg"><Trash2 size={16} /></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    );
                 }
+                
                 if(view === 'home') return renderHome();
                 if(view === 'book') return renderBooking();
                 if(view === 'appointments') return renderClientAppointments();
@@ -628,8 +709,16 @@
                         if(view === 'kiosk_book') setView('kiosk');
                         else setView('appointments');
                     }} appointmentDetails={lastBookedApp} allAppointments={appointments} isKiosk={view==='kiosk_book'} />
-                    {/* New Update Toast Component Inserted */}
                     <UpdateToast registration={swRegistration} />
+                    
+                    {/* MODAL DE CONFIRMACIÓN */}
+                    <ConfirmModal 
+                        show={confirmData.show} 
+                        msg={confirmData.msg} 
+                        onConfirm={() => { confirmData.action && confirmData.action(); setConfirmData({ show: false, msg: '', action: null }); }}
+                        onCancel={() => setConfirmData({ show: false, msg: '', action: null })} 
+                    />
+
                     {toast && <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[200] animate-bounce-in px-4 w-full max-w-sm"><div className={`text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 font-medium ${toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>{toast.type === 'success' ? <CheckCircle size={24}/> : <X size={24}/>} {toast.msg}</div></div>}
                 </div>
             );
