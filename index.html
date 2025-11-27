@@ -76,10 +76,7 @@
         const appId = 'barberia-yoel'; 
 
         const ADMIN_EMAIL = "admin@yoel.com";
-        // Defaults
-        const DEFAULT_START_TIME = "09:00";
-        const DEFAULT_END_TIME = "19:00";
-
+        const DEFAULT_TIME_SLOTS = ["09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM", "06:00 PM", "07:00 PM"];
         const DEFAULT_SERVICES = [
             { category: 'Corte', title: 'Corte Clásico', price: 500, duration: '45 min', description: 'Corte tradicional con tijera o máquina.', iconName: 'scissors' },
             { category: 'Corte', title: 'Fade / Degradado', price: 700, duration: '60 min', description: 'Degradado moderno con navaja.', iconName: 'scissors' },
@@ -91,36 +88,22 @@
 
         // --- UTILS ---
         const parseTime = (t, d) => { if(!t||!d) return new Date(); try { const [year, month, day] = d.split('-').map(Number); const [time, modifier] = t.split(' '); let [hours, minutes] = time.split(':').map(Number); if (hours === 12) hours = 0; if (modifier === 'PM') hours += 12; return new Date(year, month - 1, day, hours, minutes, 0, 0); } catch(e) { return new Date(); } };
-        const isPastTime = (t, d) => parseTime(t, d) < new Date();
+        const isPastTime = (t, d) => {
+             const now = new Date();
+             const slotDate = parseTime(t, d);
+             return slotDate < now;
+        };
         const cleanPhone = p => p ? p.replace(/\D/g, '') : '';
         const formatPhone = p => { if(!p) return 'N/A'; const c=(''+p).replace(/\D/g,''), m=c.match(/^(\d{3})(\d{3})(\d{4})$/); return m ? `(${m[1]}) ${m[2]}-${m[3]}` : p; };
         const cleanPhoneForSearch = v => v ? v.toString().replace(/\D/g, '') : '';
         const normalizeText = t => t ? t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : '';
-        
-        const parseDuration = (durStr) => {
-            if(!durStr) return 60; // Default 1h
-            const num = parseInt(durStr);
-            return isNaN(num) ? 60 : num;
-        };
-
-        // Generate slots dynamically based on interval
+        const parseDuration = (durStr) => { if(!durStr) return 60; const num = parseInt(durStr); return isNaN(num) ? 60 : num; };
         const generateTimeSlots = (startStr, endStr, intervalMinutes = 60) => {
-            if(!startStr || !endStr) return [];
-            const slots = [];
-            let [startH, startM] = startStr.split(':').map(Number);
-            const [endH, endM] = endStr.split(':').map(Number);
-            
-            let current = new Date();
-            current.setHours(startH, startM, 0, 0);
-            const end = new Date();
-            end.setHours(endH, endM, 0, 0);
-
+            if(!startStr || !endStr) return DEFAULT_TIME_SLOTS;
+            const slots = []; let [startH, startM] = startStr.split(':').map(Number); const [endH, endM] = endStr.split(':').map(Number);
+            let current = new Date(); current.setHours(startH, startM, 0, 0); const end = new Date(); end.setHours(endH, endM, 0, 0);
             while (current < end) {
-                const hours = current.getHours();
-                const minutes = current.getMinutes();
-                const ampm = hours >= 12 ? 'PM' : 'AM';
-                const displayH = hours % 12 || 12;
-                const displayM = minutes < 10 ? '0'+minutes : minutes;
+                const hours = current.getHours(); const minutes = current.getMinutes(); const ampm = hours >= 12 ? 'PM' : 'AM'; const displayH = hours % 12 || 12; const displayM = minutes < 10 ? '0'+minutes : minutes;
                 slots.push(`${displayH < 10 ? '0'+displayH : displayH}:${displayM} ${ampm}`);
                 current.setMinutes(current.getMinutes() + intervalMinutes);
             }
@@ -212,8 +195,8 @@
         };
 
         const AdminProfileView = ({ settings, onSaveSettings }) => {
-            const [start, setStart] = useState(settings.start || DEFAULT_START_TIME);
-            const [end, setEnd] = useState(settings.end || DEFAULT_END_TIME);
+            const [start, setStart] = useState(settings.start || '09:00');
+            const [end, setEnd] = useState(settings.end || '19:00');
             return (
                 <div className="pb-24 px-4 pt-20 animate-fade-in">
                      <h2 className="text-2xl font-bold mb-6 text-white">Configuración</h2>
@@ -334,7 +317,7 @@
             return (
                 <div className="min-h-screen bg-slate-900 flex flex-col p-6 relative overflow-hidden">
                     <button onClick={onExit} className="absolute top-4 left-4 text-slate-700 hover:text-slate-500"><ArrowLeft size={24}/></button>
-                    <div className="text-center mb-8 pt-4"><div className="flex items-center justify-center gap-3 mb-2"><Scissors className="text-amber-500" size={32} /><h1 className="text-3xl font-bold text-white tracking-widest">YOEL</h1></div><p className="text-slate-400 text-sm uppercase tracking-widest">Agenda del Día</p><div className="mt-6 text-6xl font-black text-white font-mono">{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div><p className="text-amber-500 font-bold mt-2">{currentTime.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
+                    <div className="text-center mb-8 pt-4"><div className="flex items-center justify-center gap-3 mb-2"><Scissors className="text-amber-500" size={32} /><h1 className="text-3xl font-bold text-white tracking-widest">YOEL</h1></div><p className="text-slate-400 text-sm uppercase tracking-widest">Agenda del Día</p><div className="mt-6 text-5xl md:text-6xl font-black text-white font-mono tracking-tighter">{currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</div><p className="text-amber-500 font-bold mt-2">{currentTime.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
                     <div className="flex-1 overflow-y-auto mb-6 pr-2">{todayList.length === 0 ? <div className="text-center py-10 opacity-40"><Calendar size={48} className="mx-auto mb-4"/><p>Agenda disponible.</p></div> : <div className="space-y-3">{todayList.map((app, idx) => { const isCompleted = app.status === 'completed'; return (<div key={app.id} className={`p-4 rounded-2xl flex items-center justify-between border ${isCompleted ? 'bg-slate-800/50 border-slate-800 opacity-50' : 'bg-slate-800 border-slate-700 shadow-lg'}`}><div className="flex items-center gap-4"><div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${isCompleted ? 'bg-slate-700 text-slate-400' : 'bg-amber-500 text-slate-900'}`}>{idx + 1}</div><div><h3 className={`font-bold ${isCompleted ? 'text-slate-400 line-through' : 'text-white'}`}>{app.userName.split(' ')[0]}</h3><p className="text-xs text-slate-400">{app.serviceTitle}</p></div></div><div className="text-right"><span className={`text-lg font-bold ${isCompleted ? 'text-slate-500' : 'text-amber-500'}`}>{app.time}</span></div></div>); })}</div>}</div>
                     <button onClick={onExpress} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-white py-6 rounded-3xl shadow-2xl shadow-amber-500/20 flex items-center justify-center gap-3 active:scale-95 transition-transform"><div className="bg-white/20 p-2 rounded-full"><Plus size={24} className="text-white"/></div><div className="text-left"><p className="text-xs font-bold text-white/80 uppercase tracking-wider">¿Sin Cita?</p><h2 className="text-2xl font-bold leading-none">CITA EXPRESS</h2></div></button>
                 </div>
@@ -379,7 +362,6 @@
             const [manualName, setManualName] = useState(''); 
             const [manualPhone, setManualPhone] = useState('');
 
-            // Settings state
             const [adminSettings, setAdminSettings] = useState({ start: '09:00', end: '19:00' });
 
             const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -391,20 +373,19 @@
             const [isSpinning, setIsSpinning] = useState(false); 
             const [kioskTempUser, setKioskTempUser] = useState(null);
 
-            // Derived Time Slots based on settings (interval fixed to 60 initially, changes per service)
             const currentTimeSlots = useMemo(() => {
                 const interval = (user?.isAdmin && bookingDuration) ? parseDuration(bookingDuration) : (selService ? parseDuration(selService.duration) : 60);
                 return generateTimeSlots(adminSettings.start, adminSettings.end, interval);
             }, [adminSettings, selService, bookingDuration, user]);
 
             // Handlers
-            const showToast = (msg, type='success') => { setToast({msg, type}); setTimeout(() => setToast(null), 3000); };
-            const handleManualRefresh = () => { setIsSpinning(true); setRefreshKey(k => k + 1); showToast('Actualizando...'); setTimeout(() => setIsSpinning(false), 1000); };
-            const handleInstall = async () => { if(deferredPrompt) { deferredPrompt.prompt(); if((await deferredPrompt.userChoice).outcome === 'accepted') setDeferredPrompt(null); } };
-            const handleSaveService = async (data) => { try { if(editingService) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'services', editingService.id), data); else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'services'), data); setShowServiceModal(false); setEditingService(null); } catch(e) { console.error(e); } };
-            const handleDeleteService = async (id) => { if(confirm("¿Borrar servicio?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'services', id)); };
+            function showToast(msg, type='success') { setToast({msg, type}); setTimeout(() => setToast(null), 3000); };
+            function handleManualRefresh() { setIsSpinning(true); setRefreshKey(k => k + 1); showToast('Actualizando...'); setTimeout(() => setIsSpinning(false), 1000); };
+            async function handleInstall() { if(deferredPrompt) { deferredPrompt.prompt(); if((await deferredPrompt.userChoice).outcome === 'accepted') setDeferredPrompt(null); } };
+            async function handleSaveService(data) { try { if(editingService) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'services', editingService.id), data); else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'services'), data); setShowServiceModal(false); setEditingService(null); } catch(e) { console.error(e); } };
+            async function handleDeleteService(id) { if(confirm("¿Borrar servicio?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'services', id)); };
             
-            const handleLookupClient = async () => {
+            async function handleLookupClient() {
                 if (!manualPhone || manualPhone.length < 10) return showToast('Ingrese teléfono válido', 'error');
                 try {
                     const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'appointments'), where('userPhone', '==', cleanPhone(manualPhone)));
@@ -421,9 +402,8 @@
                 } catch (e) { console.error(e); }
             };
 
-            const handleSaveSettings = async (newSettings) => {
+            async function handleSaveSettings(newSettings) {
                 try {
-                    // Corrected path: Collection -> Document (ID: config)
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), newSettings);
                     setAdminSettings(newSettings);
                     showToast('Horario actualizado');
@@ -431,8 +411,9 @@
                 } catch(e) { console.error(e); showToast('Error al guardar', 'error'); }
             };
 
-            const handleBook = async (tempUserOverride = null) => {
-                if(!selDate || !selTime || !selService) return;
+            async function handleBook(tempUserOverride = null, dateOverride = null) {
+                const dateToUse = dateOverride || selDate;
+                if(!dateToUse || !selTime || !selService) return;
                 try {
                     let u;
                     if (tempUserOverride) u = tempUserOverride;
@@ -447,7 +428,7 @@
                         serviceId: selService.id, 
                         serviceTitle: selService.title, 
                         price: selService.price, 
-                        date: selDate, 
+                        date: dateToUse, 
                         time: selTime, 
                         duration: finalDuration, 
                         updatedAt: new Date().toISOString(), 
@@ -464,17 +445,18 @@
                 } catch(e) { console.error(e); showToast("Error", 'error'); }
             };
 
-            const handleCancel = async (e, id) => { e.stopPropagation(); if(confirm("¿Cancelar cita?")) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', id)); showToast('Eliminada'); } };
-            const handleComplete = async (e, id) => { e.stopPropagation(); if(confirm("¿Marcar como atendido?")) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', id), { status: 'completed' }); showToast('Completado'); } };
-            const handleStartReschedule = (app) => { setEditId(app.id); setOrigBooking(app); setSelService(services.find(s => s.id === app.serviceId) || services[0]); setSelDate(app.date); setSelTime(app.time); setView('book'); };
-            const handleLogout = () => { localStorage.removeItem('yoel_session'); setUser(null); setView('home'); setSelService(null); }; 
-            const handleSaveBlock = async (d, ad, t, cb) => { if(!d) return showToast('Falta fecha','error'); if(!ad && t.length===0) return showToast('Falta hora','error'); try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'blocked_slots'), { date: d, times: ad?[]:t, wholeDay: ad, createdAt: new Date().toISOString() }); showToast('Guardado'); cb(); } catch{ showToast('Error','error'); } };
-            const handleDeleteBlock = async (id) => { if(confirm("¿Eliminar?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'blocked_slots', id)); };
+            async function handleCancel(e, id) { e.stopPropagation(); if(confirm("¿Cancelar cita?")) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', id)); showToast('Eliminada'); } };
+            async function handleComplete(e, id) { e.stopPropagation(); if(confirm("¿Marcar como atendido?")) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appointments', id), { status: 'completed' }); showToast('Completado'); } };
+            function handleStartReschedule(app) { setEditId(app.id); setOrigBooking(app); setSelService(services.find(s => s.id === app.serviceId) || services[0]); setSelDate(app.date); setSelTime(app.time); setView('book'); };
+            function handleLogout() { localStorage.removeItem('yoel_session'); setUser(null); setView('home'); setSelService(null); }; 
+            async function handleSaveBlock(d, ad, t, cb) { if(!d) return showToast('Falta fecha','error'); if(!ad && t.length===0) return showToast('Falta hora','error'); try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'blocked_slots'), { date: d, times: ad?[]:t, wholeDay: ad, createdAt: new Date().toISOString() }); showToast('Guardado'); cb(); } catch{ showToast('Error','error'); } };
+            async function handleDeleteBlock(id) { if(confirm("¿Eliminar?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'blocked_slots', id)); };
             
-            const enterKioskMode = () => setView('kiosk');
-            const startKioskBooking = () => setView('kiosk_auth'); 
-            const handleKioskGuestLogin = (g) => { setKioskTempUser({...g, uid: 'kiosk_'+Date.now()}); setView('kiosk_book'); };
+            function enterKioskMode() { setView('kiosk'); }
+            function startKioskBooking() { setView('kiosk_auth'); }
+            function handleKioskGuestLogin(g) { setKioskTempUser({...g, uid: 'kiosk_'+Date.now()}); setView('kiosk_book'); }
 
+            // Effects
             useEffect(() => { const init = async () => { if(!auth.currentUser) await signInAnonymously(auth); }; init(); window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); setDeferredPrompt(e); }); return onAuthStateChanged(auth, firebaseUser => { if (firebaseUser) { const saved = localStorage.getItem('yoel_session'); if (saved) setUser({ ...firebaseUser, ...JSON.parse(saved) }); else setUser(firebaseUser); } else setUser(null); setLoading(false); }); }, []);
             useEffect(() => { if (user && user.displayName && !user.isAnonymous && (user.isAdmin !== undefined || user.isGuest !== undefined)) { const customData = { displayName: user.displayName, email: user.email, phone: user.phone, isAdmin: user.isAdmin, isGuest: user.isGuest }; localStorage.setItem('yoel_session', JSON.stringify(customData)); } }, [user]);
             useEffect(() => { if ('serviceWorker' in navigator) navigator.serviceWorker.ready.then(registration => setSwRegistration(registration)); }, []);
@@ -489,19 +471,31 @@
             }, [user, refreshKey]); 
             useEffect(() => { if(!user?.isAdmin) return; const interval = setInterval(() => { const now = new Date(); appointments.forEach(a => { if(a.status === 'cancelada') return; const diff = Math.floor((parseTime(a.time, a.date) - now)/60000); if(diff === 15) { const msg = `Cita con ${a.userName} en 15 min.`; setNotifications(p => p.some(x => x.appId === a.id) ? p : [{id: Date.now(), appId: a.id, title: 'Recordatorio', message: msg, read: false, time: 'Ahora'}, ...p]); } }); }, 60000); return () => clearInterval(interval); }, [appointments, user]);
 
+            // Derived Data (Active/Past split logic here)
+            const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+            
             const takenTimes = useMemo(() => { if (!selDate) return []; const apptTimes = appointments.filter(a => a.date === selDate && a.status !== 'cancelada' && a.id !== editId).map(a => a.time); const blocks = blockedSlots.filter(b => b.date === selDate); const isFullDayBlocked = blocks.some(b => b.wholeDay); const adminBlockedTimes = blocks.flatMap(b => b.times || []); if (isFullDayBlocked) return currentTimeSlots; return [...new Set([...apptTimes, ...adminBlockedTimes])]; }, [selDate, appointments, editId, blockedSlots, currentTimeSlots]);
             const isDayFull = useMemo(() => { if (!selDate) return false; const blocks = blockedSlots.filter(b => b.date === selDate); if (blocks.some(b => b.wholeDay)) return true; return takenTimes.length >= currentTimeSlots.length; }, [selDate, blockedSlots, takenTimes, currentTimeSlots]);
             const clientApps = useMemo(() => (!user) ? [] : appointments.filter(a => user.isGuest ? a.userPhone === user.phone : a.userId === user.uid).sort((a,b) => parseTime(a.time, a.date) - parseTime(b.time, b.date)), [appointments, user]);
-            const adminApps = useMemo(() => { let res = [...appointments].filter(a => a.status !== 'completed'); if(searchTerm.trim()) { const cs = cleanPhoneForSearch(searchTerm), ts = normalizeText(searchTerm); res = res.filter(a => (cs && cleanPhoneForSearch(a.userPhone).includes(cs)) || normalizeText(a.userName).includes(ts)); } return res.sort((a,b) => parseTime(a.time, a.date) - parseTime(b.time, b.date)); }, [appointments, searchTerm]);
+            
+            const adminApps = useMemo(() => { 
+                let res = [...appointments].filter(a => a.status !== 'completed'); 
+                if(searchTerm.trim()) { 
+                    const cs = cleanPhoneForSearch(searchTerm), ts = normalizeText(searchTerm); 
+                    res = res.filter(a => (cs && cleanPhoneForSearch(a.userPhone).includes(cs)) || normalizeText(a.userName).includes(ts)); 
+                } 
+                return res.sort((a,b) => parseTime(a.time, a.date) - parseTime(b.time, b.date)); 
+            }, [appointments, searchTerm]);
 
             const downloadCSV = (data) => { if (!data.length) return showToast('No hay datos', 'error'); const headers = ["Fecha", "Hora", "Cliente", "Teléfono", "Servicio", "Precio", "Estado", "Tipo"]; const rows = data.map(a => [a.date, a.time, `"${a.userName}"`, a.userPhone, `"${a.serviceTitle}"`, a.price, a.status, a.isGuestBooking ? 'Invitado' : 'Registrado']); const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n"); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `reporte_barberia_yoel_${new Date().toISOString().split('T')[0]}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
             
             if(loading) return <div className="h-screen bg-slate-900 flex items-center justify-center text-amber-500 font-bold">CARGANDO...</div>;
             if(!user || !user.displayName) return <AuthScreen onLogin={u => { const fullUser = {...auth.currentUser, ...u}; setUser(fullUser); setView(u.isAdmin ? 'admin' : 'home'); }} deferredPrompt={deferredPrompt} handleInstallClick={handleInstall} />;
 
-            const renderHome = () => ( <div className="pb-24 animate-fade-in"> <div className="relative h-64 bg-slate-800 mb-6 overflow-hidden rounded-b-3xl shadow-xl flex items-end p-6"> <img src="https://i.postimg.cc/FRFN6xdB/wmremove-transformed.png" className="absolute inset-0 w-full h-full object-cover opacity-60" alt="Barber Background" /> <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent z-10"/> <div className="relative z-20"> <h2 className="text-amber-500 font-bold text-xs tracking-widest uppercase mb-1">Professional Barber</h2> <h1 className="text-3xl font-extrabold leading-none">ESTILO<br/>QUE DEFINE.</h1> {user?.isGuest && <div className="mt-2 inline-block bg-amber-500/20 text-amber-500 px-3 py-1 rounded-full text-xs font-bold border border-amber-500/50">MODO INVITADO</div>} </div> </div> <div className="px-6 space-y-4"> <div className="flex gap-4"><button onClick={()=>setView('book')} className="flex-1 bg-amber-500 py-4 rounded-2xl text-slate-900 font-bold shadow-lg flex flex-col items-center gap-1"><Calendar/><span className="text-xs">RESERVAR</span></button><button onClick={()=>setView('appointments')} className="flex-1 bg-slate-800 py-4 rounded-2xl border border-slate-700 flex flex-col items-center gap-1"><Clock/><span className="text-xs">MIS CITAS</span></button></div> <h3 className="font-bold text-lg">Servicios</h3> <div className="space-y-3">{services.map(s => <div key={s.id} className="bg-slate-800 p-4 rounded-xl flex items-center gap-4 border border-slate-700"><div className="text-amber-500 bg-slate-900 p-3 rounded-xl">{getIcon(s.iconName)}</div><div className="flex-1"><h4 className="font-bold">{s.title}</h4><p className="text-xs text-slate-400">RD$ {s.price}</p><p className="text-[10px] text-slate-500 line-clamp-1">{s.description}</p></div><button onClick={()=>{setSelService(s); setView('book');}} className="bg-slate-700 p-2 rounded-lg hover:bg-amber-500 hover:text-slate-900"><ChevronRight/></button></div>)}</div> </div> </div> );
+            // --- RENDERERS DEFINIDOS DENTRO DE APP PARA ACCEDER AL ESTADO ---
+            function renderHome() { return ( <div className="pb-24 animate-fade-in"> <div className="relative h-64 bg-slate-800 mb-6 overflow-hidden rounded-b-3xl shadow-xl flex items-end p-6"> <img src="https://i.postimg.cc/FRFN6xdB/wmremove-transformed.png" className="absolute inset-0 w-full h-full object-cover opacity-60" alt="Barber Background" /> <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent z-10"/> <div className="relative z-20"> <h2 className="text-amber-500 font-bold text-xs tracking-widest uppercase mb-1">Professional Barber</h2> <h1 className="text-3xl font-extrabold leading-none">ESTILO<br/>QUE DEFINE.</h1> {user?.isGuest && <div className="mt-2 inline-block bg-amber-500/20 text-amber-500 px-3 py-1 rounded-full text-xs font-bold border border-amber-500/50">MODO INVITADO</div>} </div> </div> <div className="px-6 space-y-4"> <div className="flex gap-4"><button onClick={()=>setView('book')} className="flex-1 bg-amber-500 py-4 rounded-2xl text-slate-900 font-bold shadow-lg flex flex-col items-center gap-1"><Calendar/><span className="text-xs">RESERVAR</span></button><button onClick={()=>setView('appointments')} className="flex-1 bg-slate-800 py-4 rounded-2xl border border-slate-700 flex flex-col items-center gap-1"><Clock/><span className="text-xs">MIS CITAS</span></button></div> <h3 className="font-bold text-lg">Servicios</h3> <div className="space-y-3">{services.map(s => <div key={s.id} className="bg-slate-800 p-4 rounded-xl flex items-center gap-4 border border-slate-700"><div className="text-amber-500 bg-slate-900 p-3 rounded-xl">{getIcon(s.iconName)}</div><div className="flex-1"><h4 className="font-bold">{s.title}</h4><p className="text-xs text-slate-400">RD$ {s.price}</p><p className="text-[10px] text-slate-500 line-clamp-1">{s.description}</p></div><button onClick={()=>{setSelService(s); setView('book');}} className="bg-slate-700 p-2 rounded-lg hover:bg-amber-500 hover:text-slate-900"><ChevronRight/></button></div>)}</div> </div> </div> ); }
 
-            const renderBooking = (isKioskMode = false) => ( 
+            function renderBooking(isKioskMode = false) { return ( 
                 <div className={`animate-fade-in ${!isKioskMode && 'pb-24 px-6 pt-20'} ${isKioskMode && 'h-screen bg-slate-900 p-6 flex flex-col'}`}> 
                     {isKioskMode && <button onClick={()=>setView('kiosk')} className="mb-4 text-slate-500"><X size={32}/></button>} 
                     <div className="flex justify-between mb-6 items-center"><h2 className="text-2xl font-bold">{editId?'Editar':'Nueva'} Cita</h2>{editId && <button onClick={()=>{setEditId(null); setOrigBooking(null); setSelService(null);}} className="text-xs text-red-400 underline">Cancelar</button>}</div> 
@@ -532,19 +526,59 @@
                         </div> 
                     )} 
                 </div> 
-            );
+            ); }
 
-            const renderClientAppointments = () => ( <div className="pb-24 px-6 pt-20 animate-fade-in"> <h2 className="text-2xl font-bold mb-6">{view === 'notifications' ? 'Notificaciones' : 'Mis Citas'}</h2> {view === 'notifications' && notifications.map(n => <div key={n.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-blue-500 flex gap-3 mb-3"><Bell className="text-blue-500"/><div><h4 className="font-bold text-sm">{n.title}</h4><p className="text-xs text-slate-400">{n.message}</p></div></div>)} {view === 'appointments' && (clientApps.length === 0 ? <div className="text-center py-20 opacity-50"><Calendar size={64} className="mx-auto mb-4"/><p>No tienes citas.</p><button onClick={()=>setView('book')} className="mt-4 text-amber-500 underline">Agendar</button></div> : <div className="space-y-4">{clientApps.map(a => <div key={a.id} className="bg-slate-800 p-5 rounded-2xl border border-slate-700"><div className="flex justify-between mb-2"><h3 className="font-bold">{a.serviceTitle}</h3><span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs font-bold">{a.status}</span></div><p className="text-amber-500 font-bold mb-2">RD$ {a.price}</p><div className="flex gap-4 text-sm text-slate-400 mb-4"><span>{a.date}</span><span>{a.time}</span></div><div className="flex gap-2"><button onClick={e=>handleCancel(e, a.id)} className="flex-1 py-2 bg-slate-900 rounded-lg text-red-400 text-xs font-bold">CANCELAR</button><button onClick={()=>handleStartReschedule(a)} className="flex-1 py-2 bg-amber-500 rounded-lg text-slate-900 text-xs font-bold">REAGENDAR</button></div></div>)}</div>)} </div> );
-            const renderProfile = () => ( <div className="pb-24 px-6 pt-20 animate-fade-in"> <div className="bg-slate-800 rounded-2xl p-6 text-center border border-slate-700 mb-6"><div className="w-24 h-24 bg-slate-900 rounded-full mx-auto mb-4 flex items-center justify-center border-2 border-amber-500"><User className="w-10 h-10 text-amber-500"/></div><h2 className="text-2xl font-bold">{user.displayName}</h2><p className="text-sm text-slate-500">{user.email||user.phone}</p>{user.isGuest && <span className="inline-block mt-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">INVITADO</span>}</div> <button onClick={handleLogout} className="w-full border border-red-500/30 text-red-400 py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-500/10"><LogOut size={18}/> Cerrar Sesión</button> </div> );
+            function renderClientAppointments() { return ( <div className="pb-24 px-6 pt-20 animate-fade-in"> <h2 className="text-2xl font-bold mb-6">{view === 'notifications' ? 'Notificaciones' : 'Mis Citas'}</h2> {view === 'notifications' && notifications.map(n => <div key={n.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-blue-500 flex gap-3 mb-3"><Bell className="text-blue-500"/><div><h4 className="font-bold text-sm">{n.title}</h4><p className="text-xs text-slate-400">{n.message}</p></div></div>)} {view === 'appointments' && (clientApps.length === 0 ? <div className="text-center py-20 opacity-50"><Calendar size={64} className="mx-auto mb-4"/><p>No tienes citas.</p><button onClick={()=>setView('book')} className="mt-4 text-amber-500 underline">Agendar</button></div> : <div className="space-y-4">{clientApps.map(a => <div key={a.id} className="bg-slate-800 p-5 rounded-2xl border border-slate-700"><div className="flex justify-between mb-2"><h3 className="font-bold">{a.serviceTitle}</h3><span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs font-bold">{a.status}</span></div><p className="text-amber-500 font-bold mb-2">RD$ {a.price}</p><div className="flex gap-4 text-sm text-slate-400 mb-4"><span>{a.date}</span><span>{a.time}</span></div><div className="flex gap-2"><button onClick={e=>handleCancel(e, a.id)} className="flex-1 py-2 bg-slate-900 rounded-lg text-red-400 text-xs font-bold">CANCELAR</button><button onClick={()=>handleStartReschedule(a)} className="flex-1 py-2 bg-amber-500 rounded-lg text-slate-900 text-xs font-bold">REAGENDAR</button></div></div>)}</div>)} </div> ); }
+            function renderProfile() { return ( <div className="pb-24 px-6 pt-20 animate-fade-in"> <div className="bg-slate-800 rounded-2xl p-6 text-center border border-slate-700 mb-6"><div className="w-24 h-24 bg-slate-900 rounded-full mx-auto mb-4 flex items-center justify-center border-2 border-amber-500"><User className="w-10 h-10 text-amber-500"/></div><h2 className="text-2xl font-bold">{user.displayName}</h2><p className="text-sm text-slate-500">{user.email||user.phone}</p>{user.isGuest && <span className="inline-block mt-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">INVITADO</span>}</div> <button onClick={handleLogout} className="w-full border border-red-500/30 text-red-400 py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-500/10"><LogOut size={18}/> Cerrar Sesión</button> </div> ); }
+
+            function renderAdmin() {
+                const filteredCount = adminApps.length;
+                const revenue = adminApps.reduce((acc, c) => acc + (c.price||0), 0);
+                const activeList = adminApps.filter(a => a.date >= todayStr);
+                const pastList = adminApps.filter(a => a.date < todayStr);
+
+                return (
+                    <div className="pb-24 px-4 pt-20 animate-fade-in">
+                        <div className="flex justify-between items-center mb-6"><div><h2 className="text-2xl font-bold">Panel Admin</h2><p className="text-xs text-slate-400">Bienvenido, Yoel</p></div><div className="flex gap-2"><button onClick={enterKioskMode} className="relative p-2 bg-slate-800 rounded-full border border-slate-700 text-amber-500"><Monitor size={20}/></button><button onClick={()=>setView('notifications')} className="relative p-2 bg-slate-800 rounded-full border border-slate-700"><Bell size={20}/>{notifications.filter(n=>!n.read).length>0&&<span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full"/>}</button></div></div>
+                        <div className="relative mb-4"><Search className="absolute left-3 top-3.5 text-slate-500" size={18}/><input className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-white outline-none focus:border-amber-500" placeholder="Buscar..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />{searchTerm && <button onClick={()=>setSearchTerm('')} className="absolute right-3 top-3.5 text-slate-500"><X size={18}/></button>}</div>
+                        {searchTerm && <div className="flex justify-between items-center mb-6 text-xs text-slate-400 bg-slate-800/50 p-2 rounded-lg border border-slate-700"><span>Mostrando {adminApps.length}</span><button onClick={()=>setSearchTerm('')} className="text-amber-500 underline">Ver todas</button></div>}
+                        
+                        <div className="grid grid-cols-2 gap-4 mb-8"><div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><Calendar size={16}/><span className="text-xs font-bold">Citas</span></div><p className="text-2xl font-bold">{adminApps.length}</p></div><div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><DollarSign size={16}/><span className="text-xs font-bold">Ingresos</span></div><p className="text-2xl font-bold text-amber-500">RD$ {adminApps.reduce((a,c)=>a+(c.price||0),0).toLocaleString()}</p></div></div>
+                        
+                        <h3 className="font-bold mb-4 flex items-center gap-2 text-white"><Clock size={18} className="text-amber-500"/> Agenda <button onClick={handleManualRefresh} className={`ml-2 hover:text-amber-500 ${isSpinning ? 'spin-anim text-amber-500' : 'text-slate-500'}`}><RefreshCw size={16} /></button> <button onClick={() => { setView('book'); setManualName(''); setManualPhone(''); }} className="ml-auto bg-amber-500 text-slate-900 p-1 rounded-lg"><Plus size={16} /></button></h3>
+                        
+                        {/* Active List */}
+                        <div className="space-y-3">{activeList.map(a => (<div key={a.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 relative"><div className="flex justify-between items-start"><div><h4 className="font-bold text-white">{a.userName} {a.isGuestBooking && <span className="text-[10px] bg-slate-700 px-1 rounded text-slate-300">INVITADO</span>}</h4><p className="text-xs text-slate-400 font-mono mt-0.5 flex gap-1 items-center"><Phone size={10}/> {formatPhone(a.userPhone)}</p><div className="mt-2 text-sm font-medium text-amber-500">{a.serviceTitle}</div></div><div className="text-right"><p className="font-bold text-lg text-white">{a.time}</p><p className="text-xs text-slate-500">{a.date}</p></div></div><div className="mt-3 pt-3 border-t border-slate-700/50 flex justify-end gap-3"><button onClick={(e) => handleComplete(e, a.id)} className="px-3 py-1.5 bg-green-500/10 text-green-400 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-green-500/20"><Check size={12} /> ATENDIDO</button><button onClick={()=>handleStartReschedule(a)} className="px-3 py-1.5 bg-blue-500/10 text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1"><RefreshCw size={12}/> EDITAR</button><button onClick={e=>handleCancel(e, a.id)} className="px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold flex items-center gap-1"><Trash2 size={12}/> BORRAR</button></div></div>))} {activeList.length===0 && <div className="text-center py-10 opacity-50"><Filter className="mx-auto mb-2"/><p>No hay resultados activos.</p></div>}</div>
+
+                        {/* Past List */}
+                        {pastList.length > 0 && (
+                            <div className="mt-8 pt-6 border-t border-slate-700/50">
+                                <h3 className="font-bold mb-4 text-slate-500 text-xs uppercase tracking-widest">Citas Pasadas (Pendientes)</h3>
+                                <div className="space-y-3 opacity-60 hover:opacity-100 transition-opacity">
+                                    {pastList.map(a => (
+                                        <div key={a.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 relative">
+                                            <div className="flex justify-between items-start">
+                                                <div><h4 className="font-bold text-white">{a.userName} <span className="text-xs text-amber-500">({a.date})</span></h4><p className="text-xs text-slate-400">{a.time} - {a.serviceTitle}</p></div>
+                                                <div className="flex gap-2">
+                                                    <button onClick={(e) => handleComplete(e, a.id)} className="p-2 bg-green-500/10 text-green-400 rounded-lg"><Check size={16} /></button>
+                                                    <button onClick={e=>handleCancel(e, a.id)} className="p-2 bg-red-500/10 text-red-400 rounded-lg"><Trash2 size={16} /></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+            
+            // --- RENDER ADMIN SERVICES (Missing) ---
+            const renderAdminServices = () => ( <div className="pb-24 px-4 pt-20 animate-fade-in"> <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold">Servicios</h2><button onClick={()=>{setEditingService(null); setShowServiceModal(true);}} className="p-2 bg-amber-500 rounded-full text-slate-900"><Plus/></button></div> <div className="space-y-3">{services.map(s => ( <div key={s.id} className="bg-slate-800 p-4 rounded-xl flex items-center justify-between border border-slate-700"> <div className="flex gap-4 items-center"><div className="bg-slate-900 p-3 rounded-xl text-amber-500">{getIcon(s.iconName)}</div><div><h4 className="font-bold">{s.title}</h4><p className="text-slate-400 text-sm">RD$ {s.price}</p></div></div> <div className="flex gap-2"><button onClick={()=>{setEditingService(s); setShowServiceModal(true);}} className="p-2 bg-slate-700 rounded-lg text-blue-400"><Edit2 size={18}/></button><button onClick={()=>handleDeleteService(s.id)} className="p-2 bg-slate-700 rounded-lg text-red-400"><Trash2 size={18}/></button></div> </div> ))}</div> </div> );
 
             const renderContent = () => {
                 if(user?.isAdmin) {
-                    if(view === 'services') return (
-                        <div className="pb-24 px-4 pt-20 animate-fade-in">
-                            <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold">Servicios</h2><button onClick={()=>{setEditingService(null); setShowServiceModal(true);}} className="p-2 bg-amber-500 rounded-full text-slate-900"><Plus/></button></div>
-                            <div className="space-y-3">{services.map(s => (<div key={s.id} className="bg-slate-800 p-4 rounded-xl flex items-center justify-between border border-slate-700"><div className="flex gap-4 items-center"><div className="bg-slate-900 p-3 rounded-xl text-amber-500">{getIcon(s.iconName)}</div><div><h4 className="font-bold">{s.title}</h4><p className="text-slate-400 text-sm">RD$ {s.price}</p></div></div><div className="flex gap-2"><button onClick={()=>{setEditingService(s); setShowServiceModal(true);}} className="p-2 bg-slate-700 rounded-lg text-blue-400"><Edit2 size={18}/></button><button onClick={()=>handleDeleteService(s.id)} className="p-2 bg-slate-700 rounded-lg text-red-400"><Trash2 size={18}/></button></div></div>))}</div>
-                        </div>
-                    );
+                    if(view === 'services') return renderAdminServices();
                     if(view === 'revenue') return <RevenueView appointments={appointments} downloadCSV={downloadCSV} />;
                     if(view === 'book') return renderBooking();
                     if(view === 'notifications') return (
@@ -558,29 +592,13 @@
                     if(view === 'kiosk_auth') return <KioskAuth setView={setView} handleKioskGuestLogin={handleKioskGuestLogin} />;
                     if(view === 'kiosk_book') return renderBooking(true);
                     if(view === 'profile') return <AdminProfileView settings={adminSettings} onSaveSettings={handleSaveSettings} />;
-
-                    return (
-                        <div className="pb-24 px-4 pt-20 animate-fade-in">
-                            <div className="flex justify-between items-center mb-6"><div><h2 className="text-2xl font-bold">Panel Admin</h2><p className="text-xs text-slate-400">Bienvenido, Yoel</p></div><div className="flex gap-2"><button onClick={enterKioskMode} className="relative p-2 bg-slate-800 rounded-full border border-slate-700 text-amber-500"><Monitor size={20}/></button><button onClick={()=>setView('notifications')} className="relative p-2 bg-slate-800 rounded-full border border-slate-700"><Bell size={20}/>{notifications.filter(n=>!n.read).length>0&&<span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full"/>}</button></div></div>
-                            <div className="relative mb-4"><Search className="absolute left-3 top-3.5 text-slate-500" size={18}/><input className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-white outline-none focus:border-amber-500" placeholder="Buscar..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />{searchTerm && <button onClick={()=>setSearchTerm('')} className="absolute right-3 top-3.5 text-slate-500"><X size={18}/></button>}</div>
-                            {searchTerm && <div className="flex justify-between items-center mb-6 text-xs text-slate-400 bg-slate-800/50 p-2 rounded-lg border border-slate-700"><span>Mostrando {adminApps.length}</span><button onClick={()=>setSearchTerm('')} className="text-amber-500 underline">Ver todas</button></div>}
-                            <div className="grid grid-cols-2 gap-4 mb-8"><div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><Calendar size={16}/><span className="text-xs font-bold">Citas</span></div><p className="text-2xl font-bold">{adminApps.length}</p></div><div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="flex items-center gap-2 text-slate-400 mb-2"><DollarSign size={16}/><span className="text-xs font-bold">Ingresos</span></div><p className="text-2xl font-bold text-amber-500">RD$ {adminApps.reduce((a,c)=>a+(c.price||0),0).toLocaleString()}</p></div></div>
-                            <h3 className="font-bold mb-4 flex items-center gap-2 text-white"><Clock size={18} className="text-amber-500"/> Agenda <button onClick={handleManualRefresh} className={`ml-2 hover:text-amber-500 ${isSpinning ? 'spin-anim text-amber-500' : 'text-slate-500'}`}><RefreshCw size={16} /></button> <button onClick={() => { setView('book'); setManualName(''); setManualPhone(''); }} className="ml-auto bg-amber-500 text-slate-900 p-1 rounded-lg"><Plus size={16} /></button></h3>
-                            <div className="space-y-3">{adminApps.map(a => (<div key={a.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-amber-500 relative"><div className="flex justify-between items-start"><div><h4 className="font-bold text-white">{a.userName} {a.isGuestBooking && <span className="text-[10px] bg-slate-700 px-1 rounded text-slate-300">INVITADO</span>}</h4><p className="text-xs text-slate-400 font-mono mt-0.5 flex gap-1 items-center"><Phone size={10}/> {formatPhone(a.userPhone)}</p><div className="mt-2 text-sm font-medium text-amber-500">{a.serviceTitle}</div></div><div className="text-right"><p className="font-bold text-lg text-white">{a.time}</p><p className="text-xs text-slate-500">{a.date}</p></div></div><div className="mt-3 pt-3 border-t border-slate-700/50 flex justify-end gap-3"><button onClick={(e) => handleComplete(e, a.id)} className="px-3 py-1.5 bg-green-500/10 text-green-400 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-green-500/20"><Check size={12} /> ATENDIDO</button><button onClick={()=>handleStartReschedule(a)} className="px-3 py-1.5 bg-blue-500/10 text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1"><RefreshCw size={12}/> EDITAR</button><button onClick={e=>handleCancel(e, a.id)} className="px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold flex items-center gap-1"><Trash2 size={12}/> BORRAR</button></div></div>))} {adminApps.length===0 && <div className="text-center py-10 opacity-50"><Filter className="mx-auto mb-2"/><p>No hay resultados.</p></div>}</div>
-                        </div>
-                    );
+                    return renderAdmin();
                 }
-                
                 if(view === 'home') return renderHome();
                 if(view === 'book') return renderBooking();
-                if(view === 'appointments') return (
-                    <div className="pb-24 px-6 pt-20 animate-fade-in"> <h2 className="text-2xl font-bold mb-6">Mis Citas</h2> {clientApps.length === 0 ? <div className="text-center py-20 opacity-50"><Calendar size={64} className="mx-auto mb-4"/><p>No tienes citas.</p><button onClick={()=>setView('book')} className="mt-4 text-amber-500 underline">Agendar</button></div> : <div className="space-y-4">{clientApps.map(a => <div key={a.id} className="bg-slate-800 p-5 rounded-2xl border border-slate-700"><div className="flex justify-between mb-2"><h3 className="font-bold">{a.serviceTitle}</h3><span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs font-bold">{a.status}</span></div><p className="text-amber-500 font-bold mb-2">RD$ {a.price}</p><div className="flex gap-4 text-sm text-slate-400 mb-4"><span>{a.date}</span><span>{a.time}</span></div><div className="flex gap-2"><button onClick={e=>handleCancel(e, a.id)} className="flex-1 py-2 bg-slate-900 rounded-lg text-red-400 text-xs font-bold">CANCELAR</button><button onClick={()=>handleStartReschedule(a)} className="flex-1 py-2 bg-amber-500 rounded-lg text-slate-900 text-xs font-bold">REAGENDAR</button></div></div>)}</div>} </div>
-                );
-                if(view === 'profile') return (
-                    <div className="pb-24 px-6 pt-20 animate-fade-in"> <div className="bg-slate-800 rounded-2xl p-6 text-center border border-slate-700 mb-6"><div className="w-24 h-24 bg-slate-900 rounded-full mx-auto mb-4 flex items-center justify-center border-2 border-amber-500"><User className="w-10 h-10 text-amber-500"/></div><h2 className="text-2xl font-bold">{user.displayName}</h2><p className="text-sm text-slate-500">{user.email||user.phone}</p>{user.isGuest && <span className="inline-block mt-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">INVITADO</span>}</div> <button onClick={handleLogout} className="w-full border border-red-500/30 text-red-400 py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-500/10"><LogOut size={18}/> Cerrar Sesión</button> </div>
-                );
-                
-                return null;
+                if(view === 'appointments') return renderClientAppointments();
+                if(view === 'profile') return renderProfile();
+                return renderHome();
             };
 
             return (
@@ -610,6 +628,7 @@
                         if(view === 'kiosk_book') setView('kiosk');
                         else setView('appointments');
                     }} appointmentDetails={lastBookedApp} allAppointments={appointments} isKiosk={view==='kiosk_book'} />
+                    {/* New Update Toast Component Inserted */}
                     <UpdateToast registration={swRegistration} />
                     {toast && <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[200] animate-bounce-in px-4 w-full max-w-sm"><div className={`text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 font-medium ${toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>{toast.type === 'success' ? <CheckCircle size={24}/> : <X size={24}/>} {toast.msg}</div></div>}
                 </div>
